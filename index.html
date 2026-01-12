@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>たかちゃんタクシーMAP</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        body { margin: 0; padding: 0; font-family: sans-serif; }
+        #map { height: 100vh; width: 100vw; }
+        .control-panel {
+            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+            z-index: 1000; width: 90%; display: flex; gap: 10px;
+        }
+        button {
+            flex: 1; padding: 15px; border-radius: 10px; border: none;
+            font-size: 16px; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+            cursor: pointer;
+        }
+        .add-btn { background: #ffcc00; color: #333; } /* 西鉄カラーっぽく！ */
+        .gps-btn { background: #ffffff; color: #333; }
+    </style>
+</head>
+<body>
+    <div class="control-panel">
+        <button class="gps-btn" onclick="goToCurrentLocation()">現在地へ</button>
+        <button class="add-btn" onclick="addMemo()">ここで拾えた！</button>
+    </div>
+    <div id="map"></div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        // 福岡市役所あたりを初期表示
+        const map = L.map('map').setView([33.5902, 130.4017], 15);
+
+        // 地図の絵（タイル）を読み込む
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
+
+        // 現在地を表示する青い丸
+        let currentPosMarker;
+        map.on('locationfound', function(e) {
+            if (currentPosMarker) map.removeLayer(currentPosMarker);
+            currentPosMarker = L.circleMarker(e.latlng, {radius: 8, color: '#007aff', fillOpacity: 0.8}).addTo(map);
+        });
+
+        function goToCurrentLocation() {
+            map.locate({setView: true, maxZoom: 16});
+        }
+
+        function addMemo() {
+            const center = map.getCenter(); // 今地図の真ん中にある場所
+            const note = prompt("メモを入力してね（例：15時 穴場）");
+            if (note) {
+                const marker = L.marker(center).addTo(map).bindPopup(note).openPopup();
+                // ※保存機能はあとで追加しよう！まずは表示まで！
+            }
+        }
+
+        // 起動時に現在地を取得
+        goToCurrentLocation();
+    </script>
+</body>
+</html>
