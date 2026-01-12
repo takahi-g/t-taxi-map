@@ -3,7 +3,223 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>たかちゃんタクシーMAP</title><!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>たかちゃんタクシーMAP</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        body { margin: 0; padding: 0; font-family: sans-serif; background: #f4f4f4; }
+        #map { height: 100vh; width: 100vw; }
+        .control-panel { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 1000; width: 95%; display: flex; gap: 10px; }
+        button { flex: 1; padding: 12px; border-radius: 10px; border: none; font-size: 14px; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.2); cursor: pointer; }
+        .gps-btn { background: #ffffff; color: #333; }
+        .list-btn { background: #333; color: #fff; }
+
+        #input-form {
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 85%; background: white; z-index: 3000; display: none;
+            padding: 20px; border-radius: 15px; box-shadow: 0 0 20px rgba(0,0,0,0.3);
+        }
+        .form-title { font-weight: bold; margin-bottom: 10px; display: block; color: #333; }
+        label { font-size: 11px; color: #888; display: block; margin-top: 10px; }
+        select, input { width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ccc; border-radius: 5px; font-size: 16px; box-sizing: border-box; }
+        .form-btns { display: flex; gap: 10px; margin-top: 20px; }
+        .save-btn { background: #ffcc00; color: #333; }
+        .cancel-btn { background: #eee; color: #666; }
+
+        #list-overlay {
+            position: fixed; bottom: 0; left: 0; width: 100%; height: 75%;
+            background: white; z-index: 2000; display: none; overflow-y: auto;
+            border-radius: 20px 20px 0 0; box-shadow: 0 -5px 15px rgba(0,0,0,0.2);
+        }
+        details { border-bottom: 1px solid #eee; }
+        summary { background: #ffcc00; padding: 12px 15px; font-weight: bold; list-style: none; display: flex; justify-content: space-between; align-items: center; }
+        .list-item { padding: 12px 15px; border-bottom: 1px solid #fafafa; display: flex; justify-content: space-between; align-items: center; }
+        .sales-badge { background: #333; color: #ffcc00; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: bold; }
+        .addr-sub { font-size: 10px; color: #999; display: block; }
+    </style>
+</head>
+<body>
+
+    <div id="input-form">
+        <span class="form-title">💰 売上とスポットを記録</span>
+        
+        <label>今回の売上（円）</label>
+        <input type="number" id="sales-input" placeholder="例：1200" inputmode="numeric">
+
+        <label>住所・詳細（自動取得）</label>
+        <input type="text" id="address-input" placeholder="住所を取得中...">
+
+        <label>地域フォルダ</label>
+        <input type="text" id="area-input" placeholder="地域名">
+
+        <label>時間</label>
+        <select id="time-input"></select>
+
+        <label>メモ</label>
+        <input type="text" id="memo-input" placeholder="例：無線、穴場！">
+
+        <div class="form-btns">
+            <button class="cancel-btn" onclick="closeForm()">やめる</button>
+            <button class="save-btn" onclick="saveMemo()">保存</button>
+        </div>
+    </div>
+
+    <div class="control-panel">
+        <button class="gps-btn" onclick="goToCurrentLocation()">現在地へ</button>
+        <button class="list-btn" onclick="toggleList()">売上・フォルダ</button>
+    </div>
+
+    <div id="list-overlay">
+        <div style="padding: 15px; font-weight: bold; border-bottom: 1px solid #ddd; position: sticky; top: 0; background: white; z-index: 10; display: flex; justify-content: space-between;">
+            <div id="total-summary">💰 総売上: ¥0</div>
+            <span onclick="toggleList()" style="color: #999;">× 閉じる</span>
+        </div>
+        <div id="memo-list-content"></div>
+    </div>
+
+    <div id="map"></div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        const map = L.map('map', { zoomControl: false }).setView([33.5902, 130.4017], 15);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+        let tempLatLng = null;
+        let markers = [];
+
+        const timeSelect = document.getElementById('time-input');
+        for(let h=0; h<24; h++){
+            for(let m=0; m<60; m+=15){
+                const hh = h.toString().padStart(2, '0');
+                const mm = m.toString().padStart(2, '0');
+                const timeStr = `${hh}:${mm}`;
+                const option = new Option(timeStr, timeStr);
+                if (timeStr === "12:00") option.selected = true;
+                timeSelect.add(option);
+            }
+        }
+
+        map.on('locationfound', e => {
+            L.circleMarker(e.latlng, {radius: 8, color: '#007aff', fillOpacity: 0.8}).addTo(map);
+        });
+
+        function goToCurrentLocation() { map.locate({setView: true, maxZoom: 16}); }
+
+        map.on('click', async e => {
+            tempLatLng = e.latlng;
+            document.getElementById('input-form').style.display = 'block';
+            document.getElementById('address-input').value = "取得中...";
+            document.getElementById('area-input').value = "取得中...";
+            document.getElementById('sales-input').value = "";
+
+            try {
+                const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${e.latlng.lat}&lon=${e.latlng.lng}&zoom=18&addressdetails=1&accept-language=ja`);
+                const data = await res.json();
+                let full = data.display_name || "";
+                let parts = full.split(', ').reverse();
+                let resultAddr = "";
+                let foundWard = false;
+
+                for (let part of parts) {
+                    if (part.includes('区')) { resultAddr += part; foundWard = true; continue; }
+                    if (foundWard && !part.includes('日本') && !part.includes('福岡') && !part.includes('市')) {
+                        resultAddr += part; break; 
+                    }
+                }
+                if (!resultAddr) resultAddr = data.address.city_district || "その他";
+                
+                document.getElementById('address-input').value = resultAddr;
+                document.getElementById('area-input').value = resultAddr;
+            } catch (err) {
+                document.getElementById('address-input').value = "取得失敗";
+                document.getElementById('area-input').value = "その他";
+            }
+        });
+
+        function closeForm() { document.getElementById('input-form').style.display = 'none'; }
+
+        function saveMemo() {
+            const sales = Number(document.getElementById('sales-input').value) || 0;
+            const address = document.getElementById('address-input').value;
+            const area = document.getElementById('area-input').value;
+            const time = document.getElementById('time-input').value;
+            const text = document.getElementById('memo-input').value;
+
+            const memos = JSON.parse(localStorage.getItem('taxiMemos') || '[]');
+            memos.push({ lat: tempLatLng.lat, lng: tempLatLng.lng, address, area, time, text, sales });
+            localStorage.setItem('taxiMemos', JSON.stringify(memos));
+            renderMemos();
+            closeForm();
+            document.getElementById('memo-input').value = "";
+        }
+
+        function renderMemos() {
+            markers.forEach(m => map.removeLayer(m));
+            markers = [];
+            const listContent = document.getElementById('memo-list-content');
+            listContent.innerHTML = '';
+            const memos = JSON.parse(localStorage.getItem('taxiMemos') || '[]');
+            
+            const groups = memos.reduce((acc, m) => { (acc[m.area] = acc[m.area] || []).push(m); return acc; }, {});
+            let grandTotal = 0;
+
+            Object.keys(groups).sort().forEach(area => {
+                const areaTotal = groups[area].reduce((sum, item) => sum + (item.sales || 0), 0);
+                grandTotal += areaTotal;
+
+                const details = document.createElement('details');
+                const summary = document.createElement('summary');
+                summary.innerHTML = `<span>📁 ${area}</span><span>¥${areaTotal.toLocaleString()}</span>`;
+                details.appendChild(summary);
+
+                groups[area].forEach((m) => {
+                    const realIndex = memos.findIndex(orig => orig === m);
+                    const marker = L.marker([m.lat, m.lng]).addTo(map);
+                    marker.bindPopup(`<b>${m.time} | ¥${(m.sales || 0).toLocaleString()}</b><br>${m.text}`);
+                    markers.push(marker);
+
+                    const item = document.createElement('div');
+                    item.className = 'list-item';
+                    item.innerHTML = `
+                        <div onclick="jumpTo(${m.lat}, ${m.lng})">
+                            <span class="sales-badge">¥${(m.sales || 0).toLocaleString()}</span> <small>${m.time}</small>
+                            <span class="addr-sub">${m.address}</span>
+                            📍 ${m.text || "メモなし"}
+                        </div>
+                        <div style="color:red; font-size:12px;" onclick="deleteMemo(${realIndex})">削除</div>
+                    `;
+                    details.appendChild(item);
+                });
+                listContent.appendChild(details);
+            });
+            document.getElementById('total-summary').innerText = `💰 総売上: ¥${grandTotal.toLocaleString()}`;
+        }
+
+        function deleteMemo(index) {
+            if(confirm("消すよ？")) {
+                let memos = JSON.parse(localStorage.getItem('taxiMemos'));
+                memos.splice(index, 1);
+                localStorage.setItem('taxiMemos', JSON.stringify(memos));
+                renderMemos();
+            }
+        }
+
+        function jumpTo(lat, lng) { map.setView([lat, lng], 17); toggleList(); }
+        function toggleList() {
+            const overlay = document.getElementById('list-overlay');
+            overlay.style.display = (overlay.style.display === 'block') ? 'none' : 'block';
+            if(overlay.style.display === 'block') renderMemos();
+        }
+
+        renderMemos();
+        goToCurrentLocation();
+    </script>
+</body>
+</html>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         body { margin: 0; padding: 0; font-family: sans-serif; background: #f4f4f4; }
