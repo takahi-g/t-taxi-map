@@ -40,22 +40,17 @@
 
     <div id="input-form">
         <span class="form-title">📍 スポットを記録</span>
-        
         <label>住所（町名まで自動取得）</label>
         <input type="text" id="address-input" placeholder="住所を取得中...">
-
         <label>地域フォルダ</label>
         <input type="text" id="area-input" list="area-options" placeholder="天神、中洲、筑紫野など">
         <datalist id="area-options">
             <option value="天神"><option value="中洲"><option value="博多駅周辺"><option value="筑紫野"><option value="春日・大野城">
         </datalist>
-
         <label>時間</label>
         <select id="time-input"></select>
-
         <label>メモ</label>
-        <input type="text" id="memo-input" placeholder="例：美野島通り、穴場！">
-
+        <input type="text" id="memo-input" placeholder="例：付け待ち多い、穴場！">
         <div class="form-btns">
             <button class="cancel-btn" onclick="closeForm()">やめる</button>
             <button class="save-btn" onclick="saveMemo()">保存</button>
@@ -79,13 +74,12 @@
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        const map = L.map('map').setView([33.5902, 130.4017], 15);
+        const map = L.map('map', { zoomControl: false }).setView([33.5902, 130.4017], 15);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
         let tempLatLng = null;
         let markers = [];
 
-        // 時間選択の作成
         const timeSelect = document.getElementById('time-input');
         for(let h=0; h<24; h++){
             for(let m=0; m<60; m+=15){
@@ -95,36 +89,33 @@
             }
         }
 
-        // 住所取得の部分をさらに強化したロジック！
+        map.on('locationfound', e => {
+            L.circleMarker(e.latlng, {radius: 8, color: '#007aff', fillOpacity: 0.8}).addTo(map);
+        });
+
+        function goToCurrentLocation() { map.locate({setView: true, maxZoom: 16}); }
+
         map.on('click', async e => {
             tempLatLng = e.latlng;
             document.getElementById('input-form').style.display = 'block';
             document.getElementById('address-input').value = "住所を取得中...";
 
             try {
+                // ここで日本語設定＋詳細住所を取得！
                 const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${e.latlng.lat}&lon=${e.latlng.lng}&zoom=18&addressdetails=1&accept-language=ja`);
                 const data = await res.json();
                 const a = data.address;
                 
-                // 福岡の住所パーツを順番にチェックして、あるものを合体させる
-                let ward = a.city_district || ""; // 博多区など
-                let town = a.suburb || a.neighbourhood || a.quarter || a.city_block || ""; // 美野島、高砂など
-                let street = a.road || ""; // 通り名
-                let houseNumber = a.house_number || ""; // 番地があれば
+                let ward = a.city_district || ""; 
+                let town = a.suburb || a.neighbourhood || a.quarter || a.city_block || ""; 
+                let street = a.road || ""; 
 
-                // 住所が「区」だけにならないように、町名をしっかり入れる
-                let fullAddress = ward + town + street + houseNumber;
-                
-                // もし空っぽだったら、全体の名前から抽出
-                if (!town && !street) {
-                    fullAddress = data.display_name.split(',')[0];
-                }
-
-                document.getElementById('address-input').value = fullAddress;
+                document.getElementById('address-input').value = ward + town + street;
             } catch (err) {
                 document.getElementById('address-input').value = "住所取得失敗";
             }
         });
+
         function closeForm() { document.getElementById('input-form').style.display = 'none'; }
 
         function saveMemo() {
@@ -152,7 +143,7 @@
             Object.keys(groups).forEach(area => {
                 const details = document.createElement('details');
                 const summary = document.createElement('summary');
-                summary.innerHTML = `<span>📁 ${area}</span><span style="font-size:12px; font-weight:normal;">${groups[area].length}件</span>`;
+                summary.innerHTML = `<span>📁 ${area}</span><span style="font-size:12px;">${groups[area].length}件</span>`;
                 details.appendChild(summary);
 
                 groups[area].forEach((m) => {
