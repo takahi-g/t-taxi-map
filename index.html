@@ -6,7 +6,7 @@
     <title>たかちゃんタクシーMAP</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
-        body { margin: 0; padding: 0; font-family: sans-serif; }
+        body { margin: 0; padding: 0; font-family: sans-serif; background: #f4f4f4; }
         #map { height: 100vh; width: 100vw; }
         .control-panel {
             position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
@@ -15,31 +15,36 @@
         button {
             flex: 1; padding: 12px; border-radius: 10px; border: none;
             font-size: 14px; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.2);
-            cursor: pointer;
         }
         .gps-btn { background: #ffffff; color: #333; }
         .list-btn { background: #333; color: #fff; }
         
         /* リスト表示用のエリア */
         #list-overlay {
-            position: fixed; bottom: 0; left: 0; width: 100%; height: 50%;
+            position: fixed; bottom: 0; left: 0; width: 100%; height: 60%;
             background: white; z-index: 2000; display: none; overflow-y: auto;
             border-radius: 20px 20px 0 0; box-shadow: 0 -5px 15px rgba(0,0,0,0.2);
         }
-        .list-item { padding: 15px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; }
-        .delete-btn { color: red; font-size: 12px; border: 1px solid red; padding: 2px 5px; border-radius: 5px; }
+        .category-header {
+            background: #ffcc00; padding: 8px 15px; font-weight: bold; font-size: 14px;
+        }
+        .list-item { 
+            padding: 12px 15px; border-bottom: 1px solid #eee; 
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .del-text { color: #ccc; font-size: 11px; margin-left: 10px; }
     </style>
 </head>
 <body>
     <div class="control-panel">
-        <button class="gps-btn" onclick="goToCurrentLocation()">現在地</button>
-        <button class="list-btn" onclick="toggleList()">メモ一覧</button>
+        <button class="gps-btn" onclick="goToCurrentLocation()">現在地へ</button>
+        <button class="list-btn" onclick="toggleList()">地域別メモ一覧</button>
     </div>
 
     <div id="list-overlay">
-        <div style="padding: 15px; font-weight: bold; border-bottom: 2px solid #ffcc00; display: flex; justify-content: space-between;">
-            <span>メモ一覧</span>
-            <span onclick="toggleList()" style="color: #999;">閉じる</span>
+        <div style="padding: 15px; font-weight: bold; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between;">
+            <span>地域別アーカイブ</span>
+            <span onclick="toggleList()" style="color: #999;">× 閉じる</span>
         </div>
         <div id="memo-list-content"></div>
     </div>
@@ -52,7 +57,7 @@
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
         let currentPosMarker;
-        let markers = []; // 地図上のピンを管理する配列
+        let markers = [];
 
         map.on('locationfound', function(e) {
             if (currentPosMarker) map.removeLayer(currentPosMarker);
@@ -63,70 +68,79 @@
             map.locate({setView: true, maxZoom: 16});
         }
 
-        // 保存されたメモを表示
+        // 地域別に整理して表示する機能
         function renderMemos() {
-            // 一旦地図とリストをクリア
             markers.forEach(m => map.removeLayer(m));
             markers = [];
             const listContent = document.getElementById('memo-list-content');
             listContent.innerHTML = '';
 
-            const savedData = localStorage.getItem('taxiMemos');
-            const memos = savedData ? JSON.parse(savedData) : [];
+            const memos = JSON.parse(localStorage.getItem('taxiMemos') || '[]');
 
-            memos.forEach((m, index) => {
-                // 地図にピンを追加
-                const marker = L.marker([m.lat, m.lng]).addTo(map);
-                marker.bindPopup(`
-                    <b>${m.text}</b><br>
-                    <button onclick="deleteMemo(${index})" style="background:red;color:white;border:none;padding:5px;margin-top:5px;border-radius:3px;">このピンを削除</button>
-                `);
-                markers.push(marker);
+            // 地域ごとにグループ化
+            const groups = memos.reduce((acc, m) => {
+                (acc[m.area] = acc[m.area] || []).push(m);
+                return acc;
+            }, {});
 
-                // リストに追加
-                const item = document.createElement('div');
-                item.className = 'list-item';
-                item.innerHTML = `
-                    <div onclick="jumpTo(${m.lat}, ${m.lng})">📍 ${m.text}</div>
-                    <div class="delete-btn" onclick="deleteMemo(${index})">削除</div>
-                `;
-                listContent.appendChild(item);
+            // 地図にピンを立てる & リスト作成
+            Object.keys(groups).forEach(area => {
+                // カテゴリ見出し
+                const header = document.createElement('div');
+                header.className = 'category-header';
+                header.innerText = `📁 ${area}`;
+                listContent.appendChild(header);
+
+                groups[area].forEach((m) => {
+                    const realIndex = memos.findIndex(orig => orig === m);
+                    
+                    // ピン
+                    const marker = L.marker([m.lat, m.lng]).addTo(map);
+                    marker.bindPopup(`<b>[${m.area}]</b><br>${m.text}<br><button onclick="deleteMemo(${realIndex})">削除</button>`);
+                    markers.push(marker);
+
+                    // リスト項目
+                    const item = document.createElement('div');
+                    item.className = 'list-item';
+                    item.innerHTML = `
+                        <div onclick="jumpTo(${m.lat}, ${m.lng})">📍 ${m.text}</div>
+                        <div class="del-text" onclick="deleteMemo(${realIndex})">削除</div>
+                    `;
+                    listContent.appendChild(item);
+                });
             });
         }
 
-        // 地図タップで追加
         map.on('click', function(e) {
-            const text = prompt("メモを入力（例：天神 18時 激アツ）");
+            const area = prompt("地域・フォルダ名を入力（例：天神、中洲、早良区）", "その他");
+            if (!area) return;
+            const text = prompt("メモ内容を入力");
             if (text) {
-                const savedData = localStorage.getItem('taxiMemos');
-                const memos = savedData ? JSON.parse(savedData) : [];
-                memos.push({ lat: e.latlng.lat, lng: e.latlng.lng, text: text });
+                const memos = JSON.parse(localStorage.getItem('taxiMemos') || '[]');
+                memos.push({ lat: e.latlng.lat, lng: e.latlng.lng, area: area, text: text });
                 localStorage.setItem('taxiMemos', JSON.stringify(memos));
                 renderMemos();
             }
         });
 
-        // 削除機能
         function deleteMemo(index) {
-            if (confirm("このメモを消してもいい？")) {
-                const savedData = localStorage.getItem('taxiMemos');
-                let memos = JSON.parse(savedData);
+            if (confirm("消しちゃうよ？")) {
+                let memos = JSON.parse(localStorage.getItem('taxiMemos'));
                 memos.splice(index, 1);
                 localStorage.setItem('taxiMemos', JSON.stringify(memos));
                 renderMemos();
             }
         }
 
-        // リスト内の場所へジャンプ
         function jumpTo(lat, lng) {
             map.setView([lat, lng], 17);
             toggleList();
         }
 
-        // リストの表示・非表示
         function toggleList() {
             const overlay = document.getElementById('list-overlay');
             overlay.style.display = (overlay.style.display === 'block') ? 'none' : 'block';
+            if(overlay.style.display === 'block') renderMemos();
         }
 
         renderMemos();
