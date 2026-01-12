@@ -13,19 +13,18 @@
         .gps-btn { background: #ffffff; color: #333; }
         .list-btn { background: #333; color: #fff; }
 
-        /* 入力用ポップアップ */
         #input-form {
             position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
             width: 85%; background: white; z-index: 3000; display: none;
             padding: 20px; border-radius: 15px; box-shadow: 0 0 20px rgba(0,0,0,0.3);
         }
-        .form-title { font-weight: bold; margin-bottom: 15px; display: block; }
-        select, input { width: 100%; padding: 10px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 5px; font-size: 16px; }
-        .form-btns { display: flex; gap: 10px; }
+        .form-title { font-weight: bold; margin-bottom: 10px; display: block; color: #333; }
+        label { font-size: 12px; color: #666; display: block; margin-top: 10px; }
+        select, input { width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ccc; border-radius: 5px; font-size: 16px; box-sizing: border-box; }
+        .form-btns { display: flex; gap: 10px; margin-top: 20px; }
         .save-btn { background: #ffcc00; color: #333; }
         .cancel-btn { background: #eee; color: #666; }
 
-        /* リスト表示 */
         #list-overlay {
             position: fixed; bottom: 0; left: 0; width: 100%; height: 75%;
             background: white; z-index: 2000; display: none; overflow-y: auto;
@@ -34,31 +33,32 @@
         details { border-bottom: 1px solid #eee; }
         summary { background: #ffcc00; padding: 12px 15px; font-weight: bold; list-style: none; display: flex; justify-content: space-between; }
         .list-item { padding: 12px 15px; border-bottom: 1px solid #fafafa; display: flex; justify-content: space-between; align-items: center; }
+        .address-text { font-size: 11px; color: #888; display: block; }
     </style>
 </head>
 <body>
 
     <div id="input-form">
         <span class="form-title">📍 スポットを記録</span>
+        
+        <label>自動取得した住所（変更可）</label>
+        <input type="text" id="address-input" placeholder="住所を取得中...">
+
         <label>地域（フォルダ）</label>
         <input type="text" id="area-input" list="area-options" placeholder="天神、中洲など">
         <datalist id="area-options">
-            <option value="天神">
-            <option value="中洲">
-            <option value="博多駅">
-            <option value="筑紫野">
-            <option value="早良区">
+            <option value="天神"><option value="中洲"><option value="博多駅"><option value="筑紫野"><option value="早良区">
         </datalist>
 
-        <label>時間（15分単位）</label>
+        <label>時間</label>
         <select id="time-input"></select>
 
         <label>メモ</label>
-        <input type="text" id="memo-input" placeholder="例：付け待ち多い、穴場">
+        <input type="text" id="memo-input" placeholder="例：乗り場が混む、休憩に最適">
 
         <div class="form-btns">
-            <button class="cancel-btn" onclick="closeForm()">キャンセル</button>
-            <button class="save-btn" onclick="saveMemo()">保存する</button>
+            <button class="cancel-btn" onclick="closeForm()">やめる</button>
+            <button class="save-btn" onclick="saveMemo()">保存</button>
         </div>
     </div>
 
@@ -85,14 +85,13 @@
         let tempLatLng = null;
         let markers = [];
 
-        // 15分刻みのセレクトボックスを作成
+        // 時間選択の作成
         const timeSelect = document.getElementById('time-input');
         for(let h=0; h<24; h++){
             for(let m=0; m<60; m+=15){
                 const hh = h.toString().padStart(2, '0');
                 const mm = m.toString().padStart(2, '0');
-                const option = new Option(`${hh}:${mm}`, `${hh}:${mm}`);
-                timeSelect.add(option);
+                timeSelect.add(new Option(`${hh}:${mm}`, `${hh}:${mm}`));
             }
         }
 
@@ -102,26 +101,40 @@
 
         function goToCurrentLocation() { map.locate({setView: true, maxZoom: 16}); }
 
-        map.on('click', e => {
+        // 地図をタップした時の処理
+        map.on('click', async e => {
             tempLatLng = e.latlng;
             document.getElementById('input-form').style.display = 'block';
+            document.getElementById('address-input').value = "住所を取得中...";
+
+            // 逆ジオコーディング（住所取得）
+            try {
+                const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${e.latlng.lat}&lon=${e.latlng.lng}&zoom=18&addressdetails=1`);
+                const data = await res.json();
+                // 建物名や道路名を優先的に表示
+                const addr = data.display_name.split(',').reverse().slice(1).join(' '); 
+                document.getElementById('address-input').value = data.address.suburb || data.address.city_district || "" ;
+                // もう少し詳しく出したい場合はこちら
+                document.getElementById('address-input').value = (data.address.city_district || "") + (data.address.suburb || "") + (data.address.road || "");
+            } catch (err) {
+                document.getElementById('address-input').value = "住所が取れませんでした";
+            }
         });
 
         function closeForm() { document.getElementById('input-form').style.display = 'none'; }
 
         function saveMemo() {
+            const address = document.getElementById('address-input').value;
             const area = document.getElementById('area-input').value || "その他";
             const time = document.getElementById('time-input').value;
             const text = document.getElementById('memo-input').value;
 
-            if (text) {
-                const memos = JSON.parse(localStorage.getItem('taxiMemos') || '[]');
-                memos.push({ lat: tempLatLng.lat, lng: tempLatLng.lng, area, time, text });
-                localStorage.setItem('taxiMemos', JSON.stringify(memos));
-                renderMemos();
-                closeForm();
-                document.getElementById('memo-input').value = "";
-            }
+            const memos = JSON.parse(localStorage.getItem('taxiMemos') || '[]');
+            memos.push({ lat: tempLatLng.lat, lng: tempLatLng.lng, address, area, time, text });
+            localStorage.setItem('taxiMemos', JSON.stringify(memos));
+            renderMemos();
+            closeForm();
+            document.getElementById('memo-input').value = "";
         }
 
         function renderMemos() {
@@ -134,19 +147,17 @@
 
             Object.keys(groups).forEach(area => {
                 const details = document.createElement('details');
-                const summary = document.createElement('summary');
-                summary.innerText = `📁 ${area} (${groups[area].length})`;
-                details.appendChild(summary);
+                details.appendChild(Object.assign(document.createElement('summary'), {innerText: `📁 ${area} (${groups[area].length})`}));
 
-                groups[area].forEach((m, idx) => {
+                groups[area].forEach((m) => {
                     const realIndex = memos.findIndex(orig => orig === m);
                     const marker = L.marker([m.lat, m.lng]).addTo(map);
-                    marker.bindPopup(`<b>[${m.area}]</b> ${m.time}<br>${m.text}`);
+                    marker.bindPopup(`<b>${m.time}頃</b><br>${m.address}<br>${m.text}`);
                     markers.push(marker);
 
                     const item = document.createElement('div');
                     item.className = 'list-item';
-                    item.innerHTML = `<div onclick="jumpTo(${m.lat}, ${m.lng})"><small>${m.time}</small><br>📍 ${m.text}</div><div style="color:red" onclick="deleteMemo(${realIndex})">削除</div>`;
+                    item.innerHTML = `<div onclick="jumpTo(${m.lat}, ${m.lng})"><small>${m.time} | ${m.address}</small><br>📍 ${m.text}</div><div style="color:red" onclick="deleteMemo(${realIndex})">削除</div>`;
                     details.appendChild(item);
                 });
                 listContent.appendChild(details);
