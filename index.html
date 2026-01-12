@@ -80,12 +80,19 @@
         let tempLatLng = null;
         let markers = [];
 
+        // --- 時間選択の作成（初期値を12:00に設定） ---
         const timeSelect = document.getElementById('time-input');
         for(let h=0; h<24; h++){
             for(let m=0; m<60; m+=15){
                 const hh = h.toString().padStart(2, '0');
                 const mm = m.toString().padStart(2, '0');
-                timeSelect.add(new Option(`${hh}:${mm}`, `${hh}:${mm}`));
+                const timeStr = `${hh}:${mm}`;
+                const option = new Option(timeStr, timeStr);
+                // 12:00を見つけたら「選択済み」にする
+                if (timeStr === "12:00") {
+                    option.selected = true;
+                }
+                timeSelect.add(option);
             }
         }
 
@@ -103,15 +110,10 @@
             try {
                 const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${e.latlng.lat}&lon=${e.latlng.lng}&zoom=18&addressdetails=1&accept-language=ja`);
                 const data = await res.json();
-                
-                // 住所を解析するロジックを大幅強化！
                 let full = data.display_name || "";
-                let parts = full.split(', ').reverse(); // 日本式に並べ替え
-                
-                // 「日本、〒xxx-xxxx、福岡県、福岡市、博多区、美野島...」から「区＋町名」付近を抽出
+                let parts = full.split(', ').reverse();
                 let resultAddr = "";
                 let foundWard = false;
-                
                 for (let part of parts) {
                     if (part.includes('区')) {
                         resultAddr += part;
@@ -119,20 +121,16 @@
                         continue;
                     }
                     if (foundWard) {
-                        // 区の後に来るのが町名（美野島など）である可能性が高い
                         if (!part.includes('日本') && !part.includes('福岡') && !part.includes('市')) {
                             resultAddr += part;
                             break; 
                         }
                     }
                 }
-
-                // もし上の処理で取れなかったら、予備のパーツを合体
                 if (!resultAddr || resultAddr.length < 5) {
                     const a = data.address;
                     resultAddr = (a.city_district || "") + (a.suburb || a.neighbourhood || a.road || "");
                 }
-
                 document.getElementById('address-input').value = resultAddr;
             } catch (err) {
                 document.getElementById('address-input').value = "住所取得失敗";
