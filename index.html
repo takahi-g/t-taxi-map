@@ -40,7 +40,7 @@
 
     <div id="input-form">
         <span class="form-title">📍 スポットを記録</span>
-        <label>住所（町名まで自動取得）</label>
+        <label>住所（自動取得）</label>
         <input type="text" id="address-input" placeholder="住所を取得中...">
         <label>地域フォルダ</label>
         <input type="text" id="area-input" list="area-options" placeholder="天神、中洲、筑紫野など">
@@ -63,7 +63,7 @@
     </div>
 
     <div id="list-overlay">
-        <div style="padding: 15px; font-weight: bold; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; position: sticky; top: 0; background: white; z-index: 10;">
+        <div style="padding: 15px; font-weight: bold; border-bottom: 1px solid #ddd; position: sticky; top: 0; background: white; z-index: 10; display: flex; justify-content: space-between;">
             <span>📁 地域別フォルダ</span>
             <span onclick="toggleList()" style="color: #999;">× 閉じる</span>
         </div>
@@ -101,16 +101,39 @@
             document.getElementById('address-input').value = "住所を取得中...";
 
             try {
-                // ここで日本語設定＋詳細住所を取得！
                 const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${e.latlng.lat}&lon=${e.latlng.lng}&zoom=18&addressdetails=1&accept-language=ja`);
                 const data = await res.json();
-                const a = data.address;
                 
-                let ward = a.city_district || ""; 
-                let town = a.suburb || a.neighbourhood || a.quarter || a.city_block || ""; 
-                let street = a.road || ""; 
+                // 住所を解析するロジックを大幅強化！
+                let full = data.display_name || "";
+                let parts = full.split(', ').reverse(); // 日本式に並べ替え
+                
+                // 「日本、〒xxx-xxxx、福岡県、福岡市、博多区、美野島...」から「区＋町名」付近を抽出
+                let resultAddr = "";
+                let foundWard = false;
+                
+                for (let part of parts) {
+                    if (part.includes('区')) {
+                        resultAddr += part;
+                        foundWard = true;
+                        continue;
+                    }
+                    if (foundWard) {
+                        // 区の後に来るのが町名（美野島など）である可能性が高い
+                        if (!part.includes('日本') && !part.includes('福岡') && !part.includes('市')) {
+                            resultAddr += part;
+                            break; 
+                        }
+                    }
+                }
 
-                document.getElementById('address-input').value = ward + town + street;
+                // もし上の処理で取れなかったら、予備のパーツを合体
+                if (!resultAddr || resultAddr.length < 5) {
+                    const a = data.address;
+                    resultAddr = (a.city_district || "") + (a.suburb || a.neighbourhood || a.road || "");
+                }
+
+                document.getElementById('address-input').value = resultAddr;
             } catch (err) {
                 document.getElementById('address-input').value = "住所取得失敗";
             }
