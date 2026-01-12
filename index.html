@@ -17,14 +17,19 @@
             font-size: 16px; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.2);
             cursor: pointer;
         }
-        .add-btn { background: #ffcc00; color: #333; }
         .gps-btn { background: #ffffff; color: #333; }
+        /* 案内用のラベル */
+        .info-label {
+            position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+            z-index: 1000; background: rgba(0,0,0,0.6); color: white;
+            padding: 5px 15px; border-radius: 20px; font-size: 12px; pointer-events: none;
+        }
     </style>
 </head>
 <body>
+    <div class="info-label">地図をタップしてメモを記録！</div>
     <div class="control-panel">
-        <button class="gps-btn" onclick="goToCurrentLocation()">現在地へ</button>
-        <button class="add-btn" onclick="addMemo()">ここで拾えた！</button>
+        <button class="gps-btn" onclick="goToCurrentLocation()">現在地へ戻る</button>
     </div>
     <div id="map"></div>
 
@@ -43,9 +48,7 @@
             map.locate({setView: true, maxZoom: 16});
         }
 
-        // --- 保存機能の部分 ---
-
-        // 保存されたメモを読み込んで地図に表示する
+        // --- 保存・表示機能 ---
         function loadMemos() {
             const savedData = localStorage.getItem('taxiMemos');
             if (savedData) {
@@ -56,22 +59,25 @@
             }
         }
 
-        function addMemo() {
-            const center = map.getCenter();
-            const text = prompt("メモを入力（例：月曜15時 穴場）");
+        // 地図をタップした時の処理
+        map.on('click', function(e) {
+            const lat = e.latlng.lat;
+            const lng = e.latlng.lng;
+            
+            const text = prompt("ここにメモを残す？（例：中洲の待機ポイント）");
             if (text) {
-                // 地図にピンを立てる
-                L.marker(center).addTo(map).bindPopup(text).openPopup();
+                // 地図にピンを表示
+                L.marker([lat, lng]).addTo(map).bindPopup(text).openPopup();
 
-                // データを保存する
+                // 保存
                 const savedData = localStorage.getItem('taxiMemos');
                 const memos = savedData ? JSON.parse(savedData) : [];
-                memos.push({ lat: center.lat, lng: center.lng, text: text });
+                memos.push({ lat: lat, lng: lng, text: text });
                 localStorage.setItem('taxiMemos', JSON.stringify(memos));
             }
-        }
+        });
 
-        loadMemos(); // 起動時に読み込み
+        loadMemos();
         goToCurrentLocation();
     </script>
 </body>
