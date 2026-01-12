@@ -10,14 +10,14 @@
         #map { height: 100vh; width: 100vw; }
         .control-panel {
             position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
-            z-index: 1000; width: 90%; display: flex; gap: 10px;
+            z-index: 1000; width: 95%; display: flex; gap: 10px;
         }
         button {
             flex: 1; padding: 15px; border-radius: 10px; border: none;
             font-size: 16px; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.2);
             cursor: pointer;
         }
-        .add-btn { background: #ffcc00; color: #333; } /* 西鉄カラーっぽく！ */
+        .add-btn { background: #ffcc00; color: #333; }
         .gps-btn { background: #ffffff; color: #333; }
     </style>
 </head>
@@ -30,15 +30,9 @@
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        // 福岡市役所あたりを初期表示
         const map = L.map('map').setView([33.5902, 130.4017], 15);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-        // 地図の絵（タイル）を読み込む
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; OpenStreetMap contributors'
-        }).addTo(map);
-
-        // 現在地を表示する青い丸
         let currentPosMarker;
         map.on('locationfound', function(e) {
             if (currentPosMarker) map.removeLayer(currentPosMarker);
@@ -49,16 +43,35 @@
             map.locate({setView: true, maxZoom: 16});
         }
 
-        function addMemo() {
-            const center = map.getCenter(); // 今地図の真ん中にある場所
-            const note = prompt("メモを入力してね（例：15時 穴場）");
-            if (note) {
-                const marker = L.marker(center).addTo(map).bindPopup(note).openPopup();
-                // ※保存機能はあとで追加しよう！まずは表示まで！
+        // --- 保存機能の部分 ---
+
+        // 保存されたメモを読み込んで地図に表示する
+        function loadMemos() {
+            const savedData = localStorage.getItem('taxiMemos');
+            if (savedData) {
+                const memos = JSON.parse(savedData);
+                memos.forEach(m => {
+                    L.marker([m.lat, m.lng]).addTo(map).bindPopup(m.text);
+                });
             }
         }
 
-        // 起動時に現在地を取得
+        function addMemo() {
+            const center = map.getCenter();
+            const text = prompt("メモを入力（例：月曜15時 穴場）");
+            if (text) {
+                // 地図にピンを立てる
+                L.marker(center).addTo(map).bindPopup(text).openPopup();
+
+                // データを保存する
+                const savedData = localStorage.getItem('taxiMemos');
+                const memos = savedData ? JSON.parse(savedData) : [];
+                memos.push({ lat: center.lat, lng: center.lng, text: text });
+                localStorage.setItem('taxiMemos', JSON.stringify(memos));
+            }
+        }
+
+        loadMemos(); // 起動時に読み込み
         goToCurrentLocation();
     </script>
 </body>
