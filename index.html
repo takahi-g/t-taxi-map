@@ -95,34 +95,36 @@
             }
         }
 
-        map.on('locationfound', e => {
-            L.circleMarker(e.latlng, {radius: 8, color: '#007aff', fillOpacity: 0.8}).addTo(map);
-        });
-
-        function goToCurrentLocation() { map.locate({setView: true, maxZoom: 16}); }
-
-        // 地図タップ時の住所取得ロジックを強化！
+        // 住所取得の部分をさらに強化したロジック！
         map.on('click', async e => {
             tempLatLng = e.latlng;
             document.getElementById('input-form').style.display = 'block';
             document.getElementById('address-input').value = "住所を取得中...";
 
             try {
-                const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${e.latlng.lat}&lon=${e.latlng.lng}&zoom=18&addressdetails=1`);
+                const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${e.latlng.lat}&lon=${e.latlng.lng}&zoom=18&addressdetails=1&accept-language=ja`);
                 const data = await res.json();
                 const a = data.address;
                 
-                // 福岡の「区」と「町名」を組み合わせて表示する
-                const ward = a.city_district || ""; // 博多区など
-                const town = a.suburb || a.neighbourhood || a.village || ""; // 美野島、高砂など
-                const street = a.road || ""; // 〇〇通りなど
+                // 福岡の住所パーツを順番にチェックして、あるものを合体させる
+                let ward = a.city_district || ""; // 博多区など
+                let town = a.suburb || a.neighbourhood || a.quarter || a.city_block || ""; // 美野島、高砂など
+                let street = a.road || ""; // 通り名
+                let houseNumber = a.house_number || ""; // 番地があれば
+
+                // 住所が「区」だけにならないように、町名をしっかり入れる
+                let fullAddress = ward + town + street + houseNumber;
                 
-                document.getElementById('address-input').value = ward + town + street;
+                // もし空っぽだったら、全体の名前から抽出
+                if (!town && !street) {
+                    fullAddress = data.display_name.split(',')[0];
+                }
+
+                document.getElementById('address-input').value = fullAddress;
             } catch (err) {
                 document.getElementById('address-input').value = "住所取得失敗";
             }
         });
-
         function closeForm() { document.getElementById('input-form').style.display = 'none'; }
 
         function saveMemo() {
