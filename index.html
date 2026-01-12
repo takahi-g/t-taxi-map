@@ -40,17 +40,19 @@
 
     <div id="input-form">
         <span class="form-title">📍 スポットを記録</span>
+        
         <label>住所（自動取得）</label>
         <input type="text" id="address-input" placeholder="住所を取得中...">
-        <label>地域フォルダ</label>
-        <input type="text" id="area-input" list="area-options" placeholder="天神、中洲、筑紫野など">
-        <datalist id="area-options">
-            <option value="天神"><option value="中洲"><option value="博多駅周辺"><option value="筑紫野"><option value="春日・大野城">
-        </datalist>
+
+        <label>地域フォルダ（住所から自動セット）</label>
+        <input type="text" id="area-input" placeholder="地域名">
+
         <label>時間</label>
         <select id="time-input"></select>
+
         <label>メモ</label>
         <input type="text" id="memo-input" placeholder="例：付け待ち多い、穴場！">
+
         <div class="form-btns">
             <button class="cancel-btn" onclick="closeForm()">やめる</button>
             <button class="save-btn" onclick="saveMemo()">保存</button>
@@ -80,7 +82,6 @@
         let tempLatLng = null;
         let markers = [];
 
-        // --- 時間選択の作成（初期値を12:00に設定） ---
         const timeSelect = document.getElementById('time-input');
         for(let h=0; h<24; h++){
             for(let m=0; m<60; m+=15){
@@ -88,10 +89,7 @@
                 const mm = m.toString().padStart(2, '0');
                 const timeStr = `${hh}:${mm}`;
                 const option = new Option(timeStr, timeStr);
-                // 12:00を見つけたら「選択済み」にする
-                if (timeStr === "12:00") {
-                    option.selected = true;
-                }
+                if (timeStr === "12:00") option.selected = true;
                 timeSelect.add(option);
             }
         }
@@ -105,7 +103,8 @@
         map.on('click', async e => {
             tempLatLng = e.latlng;
             document.getElementById('input-form').style.display = 'block';
-            document.getElementById('address-input').value = "住所を取得中...";
+            document.getElementById('address-input').value = "取得中...";
+            document.getElementById('area-input').value = "取得中...";
 
             try {
                 const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${e.latlng.lat}&lon=${e.latlng.lng}&zoom=18&addressdetails=1&accept-language=ja`);
@@ -114,6 +113,7 @@
                 let parts = full.split(', ').reverse();
                 let resultAddr = "";
                 let foundWard = false;
+
                 for (let part of parts) {
                     if (part.includes('区')) {
                         resultAddr += part;
@@ -127,13 +127,18 @@
                         }
                     }
                 }
+                
                 if (!resultAddr || resultAddr.length < 5) {
                     const a = data.address;
                     resultAddr = (a.city_district || "") + (a.suburb || a.neighbourhood || a.road || "");
                 }
+
+                // 住所を「住所欄」と「フォルダ名欄」の両方にセット！
                 document.getElementById('address-input').value = resultAddr;
+                document.getElementById('area-input').value = resultAddr; 
             } catch (err) {
-                document.getElementById('address-input').value = "住所取得失敗";
+                document.getElementById('address-input').value = "取得失敗";
+                document.getElementById('area-input').value = "その他";
             }
         });
 
@@ -161,7 +166,8 @@
             const memos = JSON.parse(localStorage.getItem('taxiMemos') || '[]');
             const groups = memos.reduce((acc, m) => { (acc[m.area] = acc[m.area] || []).push(m); return acc; }, {});
 
-            Object.keys(groups).forEach(area => {
+            // 地域フォルダ名で並び替えて表示
+            Object.keys(groups).sort().forEach(area => {
                 const details = document.createElement('details');
                 const summary = document.createElement('summary');
                 summary.innerHTML = `<span>📁 ${area}</span><span style="font-size:12px;">${groups[area].length}件</span>`;
