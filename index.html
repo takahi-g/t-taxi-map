@@ -8,47 +8,68 @@
     <style>
         body { margin: 0; padding: 0; font-family: sans-serif; background: #f4f4f4; }
         #map { height: 100vh; width: 100vw; }
-        .control-panel {
-            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
-            z-index: 1000; width: 95%; display: flex; gap: 10px;
-        }
-        button {
-            flex: 1; padding: 12px; border-radius: 10px; border: none;
-            font-size: 14px; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.2);
-        }
+        .control-panel { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 1000; width: 95%; display: flex; gap: 10px; }
+        button { flex: 1; padding: 12px; border-radius: 10px; border: none; font-size: 14px; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.2); cursor: pointer; }
         .gps-btn { background: #ffffff; color: #333; }
         .list-btn { background: #333; color: #fff; }
-        
+
+        /* 入力用ポップアップ */
+        #input-form {
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 85%; background: white; z-index: 3000; display: none;
+            padding: 20px; border-radius: 15px; box-shadow: 0 0 20px rgba(0,0,0,0.3);
+        }
+        .form-title { font-weight: bold; margin-bottom: 15px; display: block; }
+        select, input { width: 100%; padding: 10px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 5px; font-size: 16px; }
+        .form-btns { display: flex; gap: 10px; }
+        .save-btn { background: #ffcc00; color: #333; }
+        .cancel-btn { background: #eee; color: #666; }
+
+        /* リスト表示 */
         #list-overlay {
-            position: fixed; bottom: 0; left: 0; width: 100%; height: 70%;
+            position: fixed; bottom: 0; left: 0; width: 100%; height: 75%;
             background: white; z-index: 2000; display: none; overflow-y: auto;
             border-radius: 20px 20px 0 0; box-shadow: 0 -5px 15px rgba(0,0,0,0.2);
         }
-        /* フォルダ（地域）のデザイン */
         details { border-bottom: 1px solid #eee; }
-        summary { 
-            background: #ffcc00; padding: 12px 15px; font-weight: bold; 
-            list-style: none; cursor: pointer; display: flex; justify-content: space-between;
-        }
-        summary::after { content: '▼'; font-size: 10px; color: #666; }
-        details[open] summary::after { content: '▲'; }
-
-        .list-item { 
-            padding: 12px 15px; border-bottom: 1px solid #fafafa; 
-            display: flex; justify-content: space-between; align-items: center; background: #fff;
-        }
-        .del-text { color: #f00; font-size: 11px; margin-left: 10px; border: 1px solid #f00; padding: 2px 4px; border-radius: 4px; }
+        summary { background: #ffcc00; padding: 12px 15px; font-weight: bold; list-style: none; display: flex; justify-content: space-between; }
+        .list-item { padding: 12px 15px; border-bottom: 1px solid #fafafa; display: flex; justify-content: space-between; align-items: center; }
     </style>
 </head>
 <body>
+
+    <div id="input-form">
+        <span class="form-title">📍 スポットを記録</span>
+        <label>地域（フォルダ）</label>
+        <input type="text" id="area-input" list="area-options" placeholder="天神、中洲など">
+        <datalist id="area-options">
+            <option value="天神">
+            <option value="中洲">
+            <option value="博多駅">
+            <option value="筑紫野">
+            <option value="早良区">
+        </datalist>
+
+        <label>時間（15分単位）</label>
+        <select id="time-input"></select>
+
+        <label>メモ</label>
+        <input type="text" id="memo-input" placeholder="例：付け待ち多い、穴場">
+
+        <div class="form-btns">
+            <button class="cancel-btn" onclick="closeForm()">キャンセル</button>
+            <button class="save-btn" onclick="saveMemo()">保存する</button>
+        </div>
+    </div>
+
     <div class="control-panel">
         <button class="gps-btn" onclick="goToCurrentLocation()">現在地へ</button>
-        <button class="list-btn" onclick="toggleList()">地域別メモ一覧</button>
+        <button class="list-btn" onclick="toggleList()">フォルダ一覧</button>
     </div>
 
     <div id="list-overlay">
         <div style="padding: 15px; font-weight: bold; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; position: sticky; top: 0; background: white; z-index: 10;">
-            <span>📁 地域別フォルダ（タップで開く）</span>
+            <span>📁 地域別フォルダ</span>
             <span onclick="toggleList()" style="color: #999;">× 閉じる</span>
         </div>
         <div id="memo-list-content"></div>
@@ -61,16 +82,46 @@
         const map = L.map('map').setView([33.5902, 130.4017], 15);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-        let currentPosMarker;
+        let tempLatLng = null;
         let markers = [];
 
-        map.on('locationfound', function(e) {
-            if (currentPosMarker) map.removeLayer(currentPosMarker);
-            currentPosMarker = L.circleMarker(e.latlng, {radius: 8, color: '#007aff', fillOpacity: 0.8}).addTo(map);
+        // 15分刻みのセレクトボックスを作成
+        const timeSelect = document.getElementById('time-input');
+        for(let h=0; h<24; h++){
+            for(let m=0; m<60; m+=15){
+                const hh = h.toString().padStart(2, '0');
+                const mm = m.toString().padStart(2, '0');
+                const option = new Option(`${hh}:${mm}`, `${hh}:${mm}`);
+                timeSelect.add(option);
+            }
+        }
+
+        map.on('locationfound', e => {
+            L.circleMarker(e.latlng, {radius: 8, color: '#007aff', fillOpacity: 0.8}).addTo(map);
         });
 
-        function goToCurrentLocation() {
-            map.locate({setView: true, maxZoom: 16});
+        function goToCurrentLocation() { map.locate({setView: true, maxZoom: 16}); }
+
+        map.on('click', e => {
+            tempLatLng = e.latlng;
+            document.getElementById('input-form').style.display = 'block';
+        });
+
+        function closeForm() { document.getElementById('input-form').style.display = 'none'; }
+
+        function saveMemo() {
+            const area = document.getElementById('area-input').value || "その他";
+            const time = document.getElementById('time-input').value;
+            const text = document.getElementById('memo-input').value;
+
+            if (text) {
+                const memos = JSON.parse(localStorage.getItem('taxiMemos') || '[]');
+                memos.push({ lat: tempLatLng.lat, lng: tempLatLng.lng, area, time, text });
+                localStorage.setItem('taxiMemos', JSON.stringify(memos));
+                renderMemos();
+                closeForm();
+                document.getElementById('memo-input').value = "";
+            }
         }
 
         function renderMemos() {
@@ -78,12 +129,8 @@
             markers = [];
             const listContent = document.getElementById('memo-list-content');
             listContent.innerHTML = '';
-
             const memos = JSON.parse(localStorage.getItem('taxiMemos') || '[]');
-            const groups = memos.reduce((acc, m) => {
-                (acc[m.area] = acc[m.area] || []).push(m);
-                return acc;
-            }, {});
+            const groups = memos.reduce((acc, m) => { (acc[m.area] = acc[m.area] || []).push(m); return acc; }, {});
 
             Object.keys(groups).forEach(area => {
                 const details = document.createElement('details');
@@ -91,54 +138,23 @@
                 summary.innerText = `📁 ${area} (${groups[area].length})`;
                 details.appendChild(summary);
 
-                groups[area].forEach((m) => {
+                groups[area].forEach((m, idx) => {
                     const realIndex = memos.findIndex(orig => orig === m);
-                    
                     const marker = L.marker([m.lat, m.lng]).addTo(map);
-                    marker.bindPopup(`<b>[${m.area}]</b><br>${m.time}頃<br>${m.text}<br><button onclick="deleteMemo(${realIndex})">削除</button>`);
+                    marker.bindPopup(`<b>[${m.area}]</b> ${m.time}<br>${m.text}`);
                     markers.push(marker);
 
                     const item = document.createElement('div');
                     item.className = 'list-item';
-                    item.innerHTML = `
-                        <div onclick="jumpTo(${m.lat}, ${m.lng})">
-                            <small>${m.time}頃</small><br>📍 ${m.text}
-                        </div>
-                        <div class="del-text" onclick="deleteMemo(${realIndex})">削除</div>
-                    `;
+                    item.innerHTML = `<div onclick="jumpTo(${m.lat}, ${m.lng})"><small>${m.time}</small><br>📍 ${m.text}</div><div style="color:red" onclick="deleteMemo(${realIndex})">削除</div>`;
                     details.appendChild(item);
                 });
                 listContent.appendChild(details);
             });
         }
 
-        map.on('click', function(e) {
-            const area = prompt("地域名を入力（天神、中洲など）", "その他");
-            if (!area) return;
-
-            // 時間選択の作成（15分単位）
-            let timeOptions = "";
-            for(let h=0; h<24; h++){
-                for(let m=0; m<60; m+=15){
-                    let hh = h.toString().padStart(2, '0');
-                    let mm = m.toString().padStart(2, '0');
-                    timeOptions += `${hh}:${mm},`;
-                }
-            }
-            const time = prompt(`時間を入力（15分単位）\n例: 08:00, 15:15, 22:45など`, "12:00");
-            if (!time) return;
-
-            const text = prompt("メモ内容（例：付け待ち多い）");
-            if (text) {
-                const memos = JSON.parse(localStorage.getItem('taxiMemos') || '[]');
-                memos.push({ lat: e.latlng.lat, lng: e.latlng.lng, area: area, time: time, text: text });
-                localStorage.setItem('taxiMemos', JSON.stringify(memos));
-                renderMemos();
-            }
-        });
-
         function deleteMemo(index) {
-            if (confirm("本当に削除しますか？")) {
+            if(confirm("消すよ？")) {
                 let memos = JSON.parse(localStorage.getItem('taxiMemos'));
                 memos.splice(index, 1);
                 localStorage.setItem('taxiMemos', JSON.stringify(memos));
@@ -146,11 +162,7 @@
             }
         }
 
-        function jumpTo(lat, lng) {
-            map.setView([lat, lng], 17);
-            toggleList();
-        }
-
+        function jumpTo(lat, lng) { map.setView([lat, lng], 17); toggleList(); }
         function toggleList() {
             const overlay = document.getElementById('list-overlay');
             overlay.style.display = (overlay.style.display === 'block') ? 'none' : 'block';
