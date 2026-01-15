@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>たかちゃんタクシーMAP(Google編集版)</title>
+    <title>たかちゃんタクシーMAP(修正版)</title>
     <style>
         body { margin: 0; padding: 0; font-family: sans-serif; background: #f4f4f4; }
         #map { height: 100vh; width: 100vw; }
@@ -26,7 +26,7 @@
         .save-btn { background: #ffcc00; color: #333; }
         .cancel-btn { background: #eee; color: #666; }
 
-        #list-overlay { position: fixed; bottom: 0; left: 0; width: 100%; height: 80%; background: white; z-index: 2000; display: none; overflow-y: auto; border-radius: 20px 20px 0 0; }
+        #list-overlay { position: fixed; bottom: 0; left: 0; width: 100%; height: 80%; background: white; z-index: 2000; display: none; overflow-y: auto; border-radius: 20px 20px 0 0; box-shadow: 0 -5px 15px rgba(0,0,0,0.2); }
         summary { background: #ffcc00; padding: 12px 15px; font-weight: bold; list-style: none; display: flex; justify-content: space-between; align-items: center; }
         .list-item { padding: 12px 15px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
         .sales-badge { background: #333; color: #ffcc00; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: bold; }
@@ -76,7 +76,7 @@
         <select id="time-input"></select>
 
         <label>メモ</label>
-        <input type="text" id="memo-input" placeholder="例：中洲から空港">
+        <input type="text" id="memo-input" placeholder="例：無線、穴場！">
 
         <div class="form-btns">
             <button class="cancel-btn" onclick="closeForm()">やめる</button>
@@ -105,6 +105,7 @@
         let map, geocoder;
         let tempLatLng = null;
         let markers = [];
+        let currentLocMarker = null;
 
         function initMap() {
             map = new google.maps.Map(document.getElementById('map'), {
@@ -115,7 +116,7 @@
             geocoder = new google.maps.Geocoder();
 
             map.addListener('click', e => {
-                tempLatLng = e.latLng;
+                tempLatLng = { lat: e.latLng.lat(), lng: e.latLng.lng() };
                 openFormForNew();
                 geocoder.geocode({ location: e.latLng }, (results, status) => {
                     if (status === "OK" && results[0]) {
@@ -124,13 +125,16 @@
                         let components = results[0].address_components;
                         let folder = "";
                         for(let c of components) {
-                            if(c.types.includes("sublocality_level_1") || c.types.includes("sublocality_level_2")) folder += c.long_name;
+                            if(c.types.includes("sublocality_level_1") || c.types.includes("sublocality_level_2")) {
+                                folder += c.long_name;
+                            }
                         }
                         document.getElementById('area-input').value = folder || "その他";
                     }
                 });
             });
             renderMemos();
+            goToCurrentLocation();
         }
 
         const timeSelect = document.getElementById('time-input');
@@ -145,37 +149,18 @@
 
         function openFormForNew() {
             document.getElementById('edit-index').value = "";
-            document.getElementById('modal-title').innerText = "📊 新規データを記録";
+            document.getElementById('modal-title').innerText = "📊 乗車データを記録";
             document.getElementById('save-button').innerText = "保存";
             document.getElementById('sales-input').value = "";
             document.getElementById('memo-input').value = "";
             document.getElementById('input-form').style.display = 'block';
         }
 
-        function editMemo(index) {
-            const memos = JSON.parse(localStorage.getItem('taxiMemos') || '[]');
-            const m = memos[index];
-            document.getElementById('edit-index').value = index;
-            document.getElementById('modal-title').innerText = "✏️ データを編集";
-            document.getElementById('save-button').innerText = "更新する";
-            
-            document.getElementById('sales-input').value = m.sales;
-            document.getElementById('gender-input').value = m.gender;
-            document.getElementById('age-input').value = m.age;
-            document.getElementById('area-input').value = m.area;
-            document.getElementById('address-input').value = m.address;
-            document.getElementById('time-input').value = m.time;
-            document.getElementById('memo-input').value = m.text;
-            
-            tempLatLng = new google.maps.LatLng(m.lat, m.lng);
-            document.getElementById('input-form').style.display = 'block';
-            toggleList(); // リストを閉じる
-        }
-
         function saveMemo() {
             const index = document.getElementById('edit-index').value;
             const data = {
-                lat: tempLatLng.lat(), lng: tempLatLng.lng(),
+                lat: tempLatLng.lat,
+                lng: tempLatLng.lng,
                 sales: Number(document.getElementById('sales-input').value) || 0,
                 gender: document.getElementById('gender-input').value,
                 age: document.getElementById('age-input').value,
@@ -220,7 +205,10 @@
 
                 groups[area].forEach((m) => {
                     const marker = new google.maps.Marker({ position: {lat: m.lat, lng: m.lng}, map: map });
+                    const info = new google.maps.InfoWindow({ content: `<b>¥${m.sales}</b><br>${m.text}` });
+                    marker.addListener('click', () => info.open(map, marker));
                     markers.push(marker);
+
                     const item = document.createElement('div');
                     item.className = 'list-item';
                     item.innerHTML = `
@@ -240,6 +228,24 @@
             document.getElementById('total-summary').innerText = `💰 総売上: ¥${grandTotal.toLocaleString()}`;
         }
 
+        function editMemo(index) {
+            const memos = JSON.parse(localStorage.getItem('taxiMemos') || '[]');
+            const m = memos[index];
+            document.getElementById('edit-index').value = index;
+            document.getElementById('modal-title').innerText = "✏️ データを編集";
+            document.getElementById('save-button').innerText = "更新する";
+            document.getElementById('sales-input').value = m.sales;
+            document.getElementById('gender-input').value = m.gender;
+            document.getElementById('age-input').value = m.age;
+            document.getElementById('area-input').value = m.area;
+            document.getElementById('address-input').value = m.address;
+            document.getElementById('time-input').value = m.time;
+            document.getElementById('memo-input').value = m.text;
+            tempLatLng = { lat: m.lat, lng: m.lng };
+            document.getElementById('input-form').style.display = 'block';
+            document.getElementById('list-overlay').style.display = 'none';
+        }
+
         function deleteMemo(index) {
             if(confirm("削除していい？")) {
                 let memos = JSON.parse(localStorage.getItem('taxiMemos'));
@@ -254,6 +260,19 @@
                 navigator.geolocation.getCurrentPosition(pos => {
                     const latlng = {lat: pos.coords.latitude, lng: pos.coords.longitude};
                     map.setCenter(latlng);
+                    if (currentLocMarker) currentLocMarker.setMap(null);
+                    currentLocMarker = new google.maps.Marker({
+                        position: latlng,
+                        map: map,
+                        icon: {
+                            path: google.maps.SymbolPath.CIRCLE,
+                            scale: 10,
+                            fillColor: '#007aff',
+                            fillOpacity: 1,
+                            strokeWeight: 3,
+                            strokeColor: 'white'
+                        }
+                    });
                 });
             }
         }
