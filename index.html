@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>たかちゃんタクシーMAP(現在地優先)</title>
+    <title>たかちゃんタクシーMAP(復活版)</title>
     <style>
         body { margin: 0; padding: 0; font-family: sans-serif; background: #f4f4f4; }
         #map { height: 100vh; width: 100vw; }
         .control-panel { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 1000; width: 95%; display: flex; gap: 10px; }
         button { flex: 1; padding: 15px; border-radius: 12px; border: none; font-size: 16px; font-weight: bold; box-shadow: 0 4px 10px rgba(0,0,0,0.3); cursor: pointer; }
-        .gps-btn { background: #007aff; color: #fff; } /* 青色にして目立たせたよ！ */
+        .gps-btn { background: #007aff; color: #fff; }
         .list-btn { background: #333; color: #fff; }
 
         #input-form {
@@ -24,8 +24,7 @@
         .cancel-btn { background: #eee; color: #666; flex: 1; }
 
         #list-overlay { position: fixed; bottom: 0; left: 0; width: 100%; height: 80%; background: white; z-index: 2000; display: none; overflow-y: auto; border-radius: 20px 20px 0 0; }
-        summary { background: #ffcc00; padding: 12px 15px; font-weight: bold; list-style: none; display: flex; justify-content: space-between; }
-        .list-item { padding: 12px 15px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; }
+        .list-item { padding: 12px 15px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
     </style>
 </head>
 <body>
@@ -33,8 +32,7 @@
     <div id="map"></div>
 
     <div id="input-form">
-        <b style="text-align:center; display:block;">📊 記録</b>
-        <input type="hidden" id="edit-index">
+        <b style="text-align:center; display:block;">📊 営業記録</b>
         <label>売上（円）</label>
         <input type="number" id="sales-input" inputmode="numeric">
         <div style="display:flex; gap:10px;">
@@ -42,7 +40,6 @@
             <div style="flex:1;"><label>年代</label><select id="age-input"><option>30代</option><option selected>40代</option><option>50代</option></select></div>
         </div>
         <label>地域</label><input type="text" id="area-input">
-        <label>詳細住所</label><input type="text" id="address-input">
         <label>メモ</label><input type="text" id="memo-input">
         <div class="form-btns">
             <button class="cancel-btn" onclick="closeForm()">× 閉じる</button>
@@ -56,118 +53,4 @@
     </div>
 
     <div id="list-overlay">
-        <div style="padding: 15px; font-weight: bold; border-bottom: 1px solid #ddd; position: sticky; top: 0; background: white; display: flex; justify-content: space-between;">
-            <div id="total-summary">総売上: ¥0</div>
-            <span onclick="toggleList()">× 閉じる</span>
-        </div>
-        <div id="memo-list-content"></div>
-    </div>
-
-    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAi0_BQ9-5c3-7sTh1rwevVJlOsYxoLR_4&callback=initMap&libraries=places"></script>
-
-    <script>
-        let map, geocoder, currentMarker, markers = [];
-        let selectedLat, selectedLng;
-
-        function initMap() {
-            map = new google.maps.Map(document.getElementById('map'), {
-                center: {lat: 33.5902, lng: 130.4017},
-                zoom: 16,
-                disableDefaultUI: true
-            });
-            geocoder = new google.maps.Geocoder();
-
-            map.addListener('click', e => {
-                selectedLat = e.latLng.lat();
-                selectedLng = e.latLng.lng();
-                document.getElementById('input-form').style.display = 'block';
-                document.getElementById('edit-index').value = "";
-                geocoder.geocode({ location: e.latLng }, (results, status) => {
-                    if (status === "OK" && results[0]) {
-                        document.getElementById('address-input').value = results[0].formatted_address.replace("日本、", "");
-                        let folder = "";
-                        for(let c of results[0].address_components) {
-                            if(c.types.includes("sublocality_level_1") || c.types.includes("sublocality_level_2")) folder += c.long_name;
-                        }
-                        document.getElementById('area-input').value = folder || "不明";
-                    }
-                });
-            });
-            renderMemos();
-            goToCurrentLocation(); // 起動時にも現在地へ
-        }
-
-        function goToCurrentLocation() {
-            if (!navigator.geolocation) {
-                alert("GPSが使えません");
-                return;
-            }
-            navigator.geolocation.getCurrentPosition(pos => {
-                const latlng = {lat: pos.coords.latitude, lng: pos.coords.longitude};
-                map.setCenter(latlng);
-                map.setZoom(17);
-                if (currentMarker) currentMarker.setMap(null);
-                currentMarker = new google.maps.Marker({
-                    position: latlng,
-                    map: map,
-                    icon: { path: google.maps.SymbolPath.CIRCLE, scale: 10, fillColor: '#007aff', fillOpacity: 1, strokeWeight: 3, strokeColor: 'white' }
-                });
-            }, (err) => {
-                alert("位置情報の取得に失敗しました。設定でブラウザのGPSを許可してね！");
-            }, {enableHighAccuracy: true});
-        }
-
-        function saveMemo() {
-            const data = {
-                lat: selectedLat, lng: selectedLng,
-                sales: Number(document.getElementById('sales-input').value) || 0,
-                gender: document.getElementById('gender-input').value,
-                age: document.getElementById('age-input').value,
-                area: document.getElementById('area-input').value,
-                address: document.getElementById('address-input').value,
-                text: document.getElementById('memo-input').value,
-                time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
-            };
-            let memos = JSON.parse(localStorage.getItem('taxiMemos') || '[]');
-            memos.push(data);
-            localStorage.setItem('taxiMemos', JSON.stringify(memos));
-            renderMemos();
-            closeForm();
-            alert("保存したよ！");
-        }
-
-        function renderMemos() {
-            markers.forEach(m => m.setMap(null));
-            markers = [];
-            const memos = JSON.parse(localStorage.getItem('taxiMemos') || '[]');
-            let total = 0;
-            const list = document.getElementById('memo-list-content');
-            list.innerHTML = "";
-
-            memos.forEach((m, i) => {
-                total += m.sales;
-                const marker = new google.maps.Marker({ position: {lat: m.lat, lng: m.lng}, map: map });
-                markers.push(marker);
-                const item = document.createElement('div');
-                item.className = 'list-item';
-                item.innerHTML = `<div><b>¥${m.sales.toLocaleString()}</b><br><small>${m.area}</small></div><button onclick="deleteMemo(${i})">消去</button>`;
-                list.appendChild(item);
-            });
-            document.getElementById('total-summary').innerText = `総売上: ¥${total.toLocaleString()}`;
-        }
-
-        function deleteMemo(i) {
-            let memos = JSON.parse(localStorage.getItem('taxiMemos'));
-            memos.splice(i, 1);
-            localStorage.setItem('taxiMemos', JSON.stringify(memos));
-            renderMemos();
-        }
-
-        function closeForm() { document.getElementById('input-form').style.display = 'none'; }
-        function toggleList() { 
-            const o = document.getElementById('list-overlay');
-            o.style.display = (o.style.display === 'block') ? 'none' : 'block';
-        }
-    </script>
-</body>
-</html>
+        <div style="padding: 15px; font-
