@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>たかちゃんタクシーMAP</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <title>たかちゃんタクシーMAP(Google版)</title>
     <style>
         body { margin: 0; padding: 0; font-family: sans-serif; background: #f4f4f4; }
         #map { height: 100vh; width: 100vw; }
@@ -69,14 +68,17 @@
             </div>
         </div>
 
-        <label>地域フォルダ</label>
-        <input type="text" id="area-input" placeholder="地域名">
+        <label>地域フォルダ（自動取得）</label>
+        <input type="text" id="area-input" placeholder="取得中...">
+
+        <label>詳しい住所</label>
+        <input type="text" id="address-input" placeholder="詳細な住所">
 
         <label>時間</label>
         <select id="time-input"></select>
 
         <label>メモ</label>
-        <input type="text" id="memo-input" placeholder="例：無線、中洲から空港">
+        <input type="text" id="memo-input" placeholder="例：無線、穴場！">
 
         <div class="form-btns">
             <button class="cancel-btn" onclick="closeForm()">やめる</button>
@@ -99,14 +101,55 @@
 
     <div id="map"></div>
 
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script>
-        const map = L.map('map', { zoomControl: false }).setView([33.5902, 130.4017], 15);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAi0_BQ9-5c3-7sTh1rwevVJlOsYxoLR_4&callback=initMap&libraries=places" async defer></script>
 
+    <script>
+        let map, geocoder;
         let tempLatLng = null;
         let markers = [];
 
+        function initMap() {
+            map = new google.maps.Map(document.getElementById('map'), {
+                center: {lat: 33.5902, lng: 130.4017},
+                zoom: 16,
+                disableDefaultUI: true,
+                mapId: 'DEMO_MAP_ID' 
+            });
+            geocoder = new google.maps.Geocoder();
+
+            map.addListener('click', e => {
+                tempLatLng = e.latLng;
+                document.getElementById('input-form').style.display = 'block';
+                document.getElementById('area-input').value = "住所を取得中...";
+                document.getElementById('address-input').value = "";
+                document.getElementById('sales-input').value = "";
+
+                geocoder.geocode({ location: e.latLng }, (results, status) => {
+                    if (status === "OK" && results[0]) {
+                        let addressComponents = results[0].address_components;
+                        let city = "", ward = "", town = "";
+
+                        for (let component of addressComponents) {
+                            if (component.types.includes("locality")) city = component.long_name;
+                            if (component.types.includes("sublocality_level_1")) ward = component.long_name;
+                            if (component.types.includes("sublocality_level_2")) town = component.long_name;
+                        }
+
+                        // フォルダ名には「区＋町名」を入れる
+                        let folderName = (ward + town) || "不明なエリア";
+                        document.getElementById('area-input').value = folderName;
+                        // 住所欄には全体の住所を入れる
+                        document.getElementById('address-input').value = results[0].formatted_address.replace("日本、", "");
+                    } else {
+                        document.getElementById('area-input').value = "その他";
+                    }
+                });
+            });
+            renderMemos();
+            goToCurrentLocation();
+        }
+
+        // 時間選択の作成
         const timeSelect = document.getElementById('time-input');
         for(let h=0; h<24; h++){
             for(let m=0; m<60; m+=15){
@@ -119,51 +162,44 @@
             }
         }
 
-        map.on('locationfound', e => {
-            L.circleMarker(e.latlng, {radius: 8, color: '#007aff', fillOpacity: 0.8}).addTo(map);
-        });
-
-        function goToCurrentLocation() { map.locate({setView: true, maxZoom: 16}); }
-
-        map.on('click', async e => {
-            tempLatLng = e.latlng;
-            document.getElementById('input-form').style.display = 'block';
-            document.getElementById('area-input').value = "取得中...";
-            document.getElementById('sales-input').value = "";
-
-            try {
-                const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${e.latlng.lat}&lon=${e.latlng.lng}&zoom=18&addressdetails=1&accept-language=ja`);
-                const data = await res.json();
-                let full = data.display_name || "";
-                let parts = full.split(', ').reverse();
-                let resultAddr = "";
-                let foundWard = false;
-
-                for (let part of parts) {
-                    if (part.includes('区')) { resultAddr += part; foundWard = true; continue; }
-                    if (foundWard && !part.includes('日本') && !part.includes('福岡') && !part.includes('市')) {
-                        resultAddr += part; break; 
-                    }
-                }
-                if (!resultAddr) resultAddr = data.address.city_district || "その他";
-                document.getElementById('area-input').value = resultAddr;
-            } catch (err) {
-                document.getElementById('area-input').value = "その他";
+        function goToCurrentLocation() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(pos => {
+                    const latlng = {lat: pos.coords.latitude, lng: pos.coords.longitude};
+                    map.setCenter(latlng);
+                    new google.maps.Marker({
+                        position: latlng,
+                        map: map,
+                        icon: {
+                            path: google.maps.SymbolPath.CIRCLE,
+                            scale: 8,
+                            fillColor: '#007aff',
+                            fillOpacity: 1,
+                            strokeWeight: 2,
+                            strokeColor: 'white'
+                        }
+                    });
+                });
             }
-        });
+        }
 
         function closeForm() { document.getElementById('input-form').style.display = 'none'; }
 
         function saveMemo() {
-            const sales = Number(document.getElementById('sales-input').value) || 0;
-            const gender = document.getElementById('gender-input').value;
-            const age = document.getElementById('age-input').value;
-            const area = document.getElementById('area-input').value;
-            const time = document.getElementById('time-input').value;
-            const text = document.getElementById('memo-input').value;
+            const data = {
+                lat: tempLatLng.lat(),
+                lng: tempLatLng.lng(),
+                sales: Number(document.getElementById('sales-input').value) || 0,
+                gender: document.getElementById('gender-input').value,
+                age: document.getElementById('age-input').value,
+                area: document.getElementById('area-input').value,
+                address: document.getElementById('address-input').value,
+                time: document.getElementById('time-input').value,
+                text: document.getElementById('memo-input').value
+            };
 
             const memos = JSON.parse(localStorage.getItem('taxiMemos') || '[]');
-            memos.push({ lat: tempLatLng.lat, lng: tempLatLng.lng, sales, gender, age, area, time, text });
+            memos.push(data);
             localStorage.setItem('taxiMemos', JSON.stringify(memos));
             renderMemos();
             closeForm();
@@ -171,7 +207,7 @@
         }
 
         function renderMemos() {
-            markers.forEach(m => map.removeLayer(m));
+            markers.forEach(m => m.setMap(null));
             markers = [];
             const listContent = document.getElementById('memo-list-content');
             listContent.innerHTML = '';
@@ -190,8 +226,14 @@
 
                 groups[area].forEach((m) => {
                     const realIndex = memos.findIndex(orig => orig === m);
-                    const marker = L.marker([m.lat, m.lng]).addTo(map);
-                    marker.bindPopup(`<b>${m.time} | ¥${(m.sales || 0).toLocaleString()}</b><br>${m.gender} ${m.age}<br>${m.text}`);
+                    const marker = new google.maps.Marker({
+                        position: {lat: m.lat, lng: m.lng},
+                        map: map
+                    });
+                    const infoWindow = new google.maps.InfoWindow({
+                        content: `<b>${m.time} | ¥${(m.sales || 0).toLocaleString()}</b><br>${m.gender} ${m.age}<br>${m.text}`
+                    });
+                    marker.addListener('click', () => infoWindow.open(map, marker));
                     markers.push(marker);
 
                     const item = document.createElement('div');
@@ -201,7 +243,7 @@
                             <span class="sales-badge">¥${(m.sales || 0).toLocaleString()}</span> 
                             <small>${m.time}</small><br>
                             <span class="customer-info">${m.gender} / ${m.age}</span>
-                            <span style="font-size:12px;">📍 ${m.text || "メモなし"}</span>
+                            <span style="font-size:11px; color:#666;">📍 ${m.area}</span>
                         </div>
                         <div style="color:red; font-size:12px;" onclick="deleteMemo(${realIndex})">削除</div>
                     `;
@@ -221,15 +263,17 @@
             }
         }
 
-        function jumpTo(lat, lng) { map.setView([lat, lng], 17); toggleList(); }
+        function jumpTo(lat, lng) { 
+            map.setCenter({lat, lng}); 
+            map.setZoom(17);
+            toggleList(); 
+        }
+
         function toggleList() {
             const overlay = document.getElementById('list-overlay');
             overlay.style.display = (overlay.style.display === 'block') ? 'none' : 'block';
             if(overlay.style.display === 'block') renderMemos();
         }
-
-        renderMemos();
-        goToCurrentLocation();
     </script>
 </body>
 </html>
