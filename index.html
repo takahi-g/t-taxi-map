@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>たかちゃんタクシーMAP(修正版)</title>
+    <title>たかちゃんタクシーMAP(完全版)</title>
     <style>
         body { margin: 0; padding: 0; font-family: sans-serif; background: #f4f4f4; }
         #map { height: 100vh; width: 100vw; }
@@ -103,7 +103,8 @@
 
     <script>
         let map, geocoder;
-        let tempLatLng = null;
+        let selectedLat = null;
+        let selectedLng = null;
         let markers = [];
         let currentLocMarker = null;
 
@@ -116,7 +117,8 @@
             geocoder = new google.maps.Geocoder();
 
             map.addListener('click', e => {
-                tempLatLng = { lat: e.latLng.lat(), lng: e.latLng.lng() };
+                selectedLat = e.latLng.lat();
+                selectedLng = e.latLng.lng();
                 openFormForNew();
                 geocoder.geocode({ location: e.latLng }, (results, status) => {
                     if (status === "OK" && results[0]) {
@@ -159,8 +161,8 @@
         function saveMemo() {
             const index = document.getElementById('edit-index').value;
             const data = {
-                lat: tempLatLng.lat,
-                lng: tempLatLng.lng,
+                lat: selectedLat,
+                lng: selectedLng,
                 sales: Number(document.getElementById('sales-input').value) || 0,
                 gender: document.getElementById('gender-input').value,
                 age: document.getElementById('age-input').value,
@@ -187,6 +189,8 @@
             const listContent = document.getElementById('memo-list-content');
             listContent.innerHTML = '';
             const memos = JSON.parse(localStorage.getItem('taxiMemos') || '[]');
+            
+            let grandTotal = 0;
             const groups = memos.reduce((acc, m, i) => { 
                 const area = m.area || "その他";
                 acc[area] = acc[area] || [];
@@ -194,7 +198,6 @@
                 return acc; 
             }, {});
 
-            let grandTotal = 0;
             Object.keys(groups).sort().forEach(area => {
                 const areaTotal = groups[area].reduce((sum, item) => sum + item.sales, 0);
                 grandTotal += areaTotal;
@@ -205,10 +208,7 @@
 
                 groups[area].forEach((m) => {
                     const marker = new google.maps.Marker({ position: {lat: m.lat, lng: m.lng}, map: map });
-                    const info = new google.maps.InfoWindow({ content: `<b>¥${m.sales}</b><br>${m.text}` });
-                    marker.addListener('click', () => info.open(map, marker));
                     markers.push(marker);
-
                     const item = document.createElement('div');
                     item.className = 'list-item';
                     item.innerHTML = `
@@ -241,7 +241,8 @@
             document.getElementById('address-input').value = m.address;
             document.getElementById('time-input').value = m.time;
             document.getElementById('memo-input').value = m.text;
-            tempLatLng = { lat: m.lat, lng: m.lng };
+            selectedLat = m.lat;
+            selectedLng = m.lng;
             document.getElementById('input-form').style.display = 'block';
             document.getElementById('list-overlay').style.display = 'none';
         }
@@ -273,7 +274,9 @@
                             strokeColor: 'white'
                         }
                     });
-                });
+                }, (error) => {
+                    alert("GPSをオンにしてね！");
+                }, {enableHighAccuracy: true});
             }
         }
         function closeForm() { document.getElementById('input-form').style.display = 'none'; }
