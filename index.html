@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>たかちゃんタクシーMAP(Google版)</title>
+    <title>たかちゃんタクシーMAP(Google編集版)</title>
     <style>
         body { margin: 0; padding: 0; font-family: sans-serif; background: #f4f4f4; }
         #map { height: 100vh; width: 100vw; }
@@ -26,21 +26,19 @@
         .save-btn { background: #ffcc00; color: #333; }
         .cancel-btn { background: #eee; color: #666; }
 
-        #list-overlay {
-            position: fixed; bottom: 0; left: 0; width: 100%; height: 80%;
-            background: white; z-index: 2000; display: none; overflow-y: auto;
-            border-radius: 20px 20px 0 0; box-shadow: 0 -5px 15px rgba(0,0,0,0.2);
-        }
+        #list-overlay { position: fixed; bottom: 0; left: 0; width: 100%; height: 80%; background: white; z-index: 2000; display: none; overflow-y: auto; border-radius: 20px 20px 0 0; }
         summary { background: #ffcc00; padding: 12px 15px; font-weight: bold; list-style: none; display: flex; justify-content: space-between; align-items: center; }
         .list-item { padding: 12px 15px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
         .sales-badge { background: #333; color: #ffcc00; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: bold; }
-        .customer-info { font-size: 11px; color: #555; background: #e9e9e9; padding: 2px 5px; border-radius: 3px; margin-right: 5px; }
+        .edit-btn { color: #007aff; font-size: 12px; margin-right: 15px; }
+        .del-btn { color: red; font-size: 12px; }
     </style>
 </head>
 <body>
 
     <div id="input-form">
-        <span class="form-title">📊 乗車データを記録</span>
+        <span id="modal-title" class="form-title">📊 乗車データを記録</span>
+        <input type="hidden" id="edit-index" value="">
         
         <label>今回の売上（円）</label>
         <input type="number" id="sales-input" placeholder="例：1200" inputmode="numeric">
@@ -68,21 +66,21 @@
             </div>
         </div>
 
-        <label>地域フォルダ（自動取得）</label>
-        <input type="text" id="area-input" placeholder="取得中...">
+        <label>地域フォルダ</label>
+        <input type="text" id="area-input">
 
         <label>詳しい住所</label>
-        <input type="text" id="address-input" placeholder="詳細な住所">
+        <input type="text" id="address-input">
 
         <label>時間</label>
         <select id="time-input"></select>
 
         <label>メモ</label>
-        <input type="text" id="memo-input" placeholder="例：無線、穴場！">
+        <input type="text" id="memo-input" placeholder="例：中洲から空港">
 
         <div class="form-btns">
             <button class="cancel-btn" onclick="closeForm()">やめる</button>
-            <button class="save-btn" onclick="saveMemo()">保存</button>
+            <button class="save-btn" id="save-button" onclick="saveMemo()">保存</button>
         </div>
     </div>
 
@@ -112,83 +110,72 @@
             map = new google.maps.Map(document.getElementById('map'), {
                 center: {lat: 33.5902, lng: 130.4017},
                 zoom: 16,
-                disableDefaultUI: true,
-                mapId: 'DEMO_MAP_ID' 
+                disableDefaultUI: true
             });
             geocoder = new google.maps.Geocoder();
 
             map.addListener('click', e => {
                 tempLatLng = e.latLng;
-                document.getElementById('input-form').style.display = 'block';
-                document.getElementById('area-input').value = "住所を取得中...";
-                document.getElementById('address-input').value = "";
-                document.getElementById('sales-input').value = "";
-
+                openFormForNew();
                 geocoder.geocode({ location: e.latLng }, (results, status) => {
                     if (status === "OK" && results[0]) {
-                        let addressComponents = results[0].address_components;
-                        let city = "", ward = "", town = "";
-
-                        for (let component of addressComponents) {
-                            if (component.types.includes("locality")) city = component.long_name;
-                            if (component.types.includes("sublocality_level_1")) ward = component.long_name;
-                            if (component.types.includes("sublocality_level_2")) town = component.long_name;
+                        let addr = results[0].formatted_address.replace("日本、", "");
+                        document.getElementById('address-input').value = addr;
+                        let components = results[0].address_components;
+                        let folder = "";
+                        for(let c of components) {
+                            if(c.types.includes("sublocality_level_1") || c.types.includes("sublocality_level_2")) folder += c.long_name;
                         }
-
-                        // フォルダ名には「区＋町名」を入れる
-                        let folderName = (ward + town) || "不明なエリア";
-                        document.getElementById('area-input').value = folderName;
-                        // 住所欄には全体の住所を入れる
-                        document.getElementById('address-input').value = results[0].formatted_address.replace("日本、", "");
-                    } else {
-                        document.getElementById('area-input').value = "その他";
+                        document.getElementById('area-input').value = folder || "その他";
                     }
                 });
             });
             renderMemos();
-            goToCurrentLocation();
         }
 
-        // 時間選択の作成
         const timeSelect = document.getElementById('time-input');
         for(let h=0; h<24; h++){
             for(let m=0; m<60; m+=15){
                 const hh = h.toString().padStart(2, '0');
                 const mm = m.toString().padStart(2, '0');
                 const timeStr = `${hh}:${mm}`;
-                const option = new Option(timeStr, timeStr);
-                if (timeStr === "12:00") option.selected = true;
-                timeSelect.add(option);
+                timeSelect.add(new Option(timeStr, timeStr, timeStr==="12:00", timeStr==="12:00"));
             }
         }
 
-        function goToCurrentLocation() {
-            if (navigator.geolocation) {
-                navigator.geolocation.getCurrentPosition(pos => {
-                    const latlng = {lat: pos.coords.latitude, lng: pos.coords.longitude};
-                    map.setCenter(latlng);
-                    new google.maps.Marker({
-                        position: latlng,
-                        map: map,
-                        icon: {
-                            path: google.maps.SymbolPath.CIRCLE,
-                            scale: 8,
-                            fillColor: '#007aff',
-                            fillOpacity: 1,
-                            strokeWeight: 2,
-                            strokeColor: 'white'
-                        }
-                    });
-                });
-            }
+        function openFormForNew() {
+            document.getElementById('edit-index').value = "";
+            document.getElementById('modal-title').innerText = "📊 新規データを記録";
+            document.getElementById('save-button').innerText = "保存";
+            document.getElementById('sales-input').value = "";
+            document.getElementById('memo-input').value = "";
+            document.getElementById('input-form').style.display = 'block';
         }
 
-        function closeForm() { document.getElementById('input-form').style.display = 'none'; }
+        function editMemo(index) {
+            const memos = JSON.parse(localStorage.getItem('taxiMemos') || '[]');
+            const m = memos[index];
+            document.getElementById('edit-index').value = index;
+            document.getElementById('modal-title').innerText = "✏️ データを編集";
+            document.getElementById('save-button').innerText = "更新する";
+            
+            document.getElementById('sales-input').value = m.sales;
+            document.getElementById('gender-input').value = m.gender;
+            document.getElementById('age-input').value = m.age;
+            document.getElementById('area-input').value = m.area;
+            document.getElementById('address-input').value = m.address;
+            document.getElementById('time-input').value = m.time;
+            document.getElementById('memo-input').value = m.text;
+            
+            tempLatLng = new google.maps.LatLng(m.lat, m.lng);
+            document.getElementById('input-form').style.display = 'block';
+            toggleList(); // リストを閉じる
+        }
 
         function saveMemo() {
+            const index = document.getElementById('edit-index').value;
             const data = {
-                lat: tempLatLng.lat(),
-                lng: tempLatLng.lng(),
+                lat: tempLatLng.lat(), lng: tempLatLng.lng(),
                 sales: Number(document.getElementById('sales-input').value) || 0,
                 gender: document.getElementById('gender-input').value,
                 age: document.getElementById('age-input').value,
@@ -198,12 +185,15 @@
                 text: document.getElementById('memo-input').value
             };
 
-            const memos = JSON.parse(localStorage.getItem('taxiMemos') || '[]');
-            memos.push(data);
+            let memos = JSON.parse(localStorage.getItem('taxiMemos') || '[]');
+            if (index === "") {
+                memos.push(data);
+            } else {
+                memos[index] = data;
+            }
             localStorage.setItem('taxiMemos', JSON.stringify(memos));
             renderMemos();
             closeForm();
-            document.getElementById('memo-input').value = "";
         }
 
         function renderMemos() {
@@ -212,40 +202,36 @@
             const listContent = document.getElementById('memo-list-content');
             listContent.innerHTML = '';
             const memos = JSON.parse(localStorage.getItem('taxiMemos') || '[]');
-            const groups = memos.reduce((acc, m) => { (acc[m.area] = acc[m.area] || []).push(m); return acc; }, {});
+            const groups = memos.reduce((acc, m, i) => { 
+                const area = m.area || "その他";
+                acc[area] = acc[area] || [];
+                acc[area].push({...m, originalIndex: i});
+                return acc; 
+            }, {});
+
             let grandTotal = 0;
-
             Object.keys(groups).sort().forEach(area => {
-                const areaTotal = groups[area].reduce((sum, item) => sum + (item.sales || 0), 0);
+                const areaTotal = groups[area].reduce((sum, item) => sum + item.sales, 0);
                 grandTotal += areaTotal;
-
                 const details = document.createElement('details');
                 const summary = document.createElement('summary');
                 summary.innerHTML = `<span>📁 ${area}</span><span>¥${areaTotal.toLocaleString()}</span>`;
                 details.appendChild(summary);
 
                 groups[area].forEach((m) => {
-                    const realIndex = memos.findIndex(orig => orig === m);
-                    const marker = new google.maps.Marker({
-                        position: {lat: m.lat, lng: m.lng},
-                        map: map
-                    });
-                    const infoWindow = new google.maps.InfoWindow({
-                        content: `<b>${m.time} | ¥${(m.sales || 0).toLocaleString()}</b><br>${m.gender} ${m.age}<br>${m.text}`
-                    });
-                    marker.addListener('click', () => infoWindow.open(map, marker));
+                    const marker = new google.maps.Marker({ position: {lat: m.lat, lng: m.lng}, map: map });
                     markers.push(marker);
-
                     const item = document.createElement('div');
                     item.className = 'list-item';
                     item.innerHTML = `
                         <div onclick="jumpTo(${m.lat}, ${m.lng})">
-                            <span class="sales-badge">¥${(m.sales || 0).toLocaleString()}</span> 
-                            <small>${m.time}</small><br>
-                            <span class="customer-info">${m.gender} / ${m.age}</span>
-                            <span style="font-size:11px; color:#666;">📍 ${m.area}</span>
+                            <span class="sales-badge">¥${m.sales.toLocaleString()}</span> <small>${m.time}</small><br>
+                            <span style="font-size:11px;">${m.gender}/${m.age} 📍${m.text || ""}</span>
                         </div>
-                        <div style="color:red; font-size:12px;" onclick="deleteMemo(${realIndex})">削除</div>
+                        <div>
+                            <span class="edit-btn" onclick="editMemo(${m.originalIndex})">編集</span>
+                            <span class="del-btn" onclick="deleteMemo(${m.originalIndex})">削除</span>
+                        </div>
                     `;
                     details.appendChild(item);
                 });
@@ -255,7 +241,7 @@
         }
 
         function deleteMemo(index) {
-            if(confirm("このデータを消すよ？")) {
+            if(confirm("削除していい？")) {
                 let memos = JSON.parse(localStorage.getItem('taxiMemos'));
                 memos.splice(index, 1);
                 localStorage.setItem('taxiMemos', JSON.stringify(memos));
@@ -263,16 +249,19 @@
             }
         }
 
-        function jumpTo(lat, lng) { 
-            map.setCenter({lat, lng}); 
-            map.setZoom(17);
-            toggleList(); 
+        function goToCurrentLocation() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(pos => {
+                    const latlng = {lat: pos.coords.latitude, lng: pos.coords.longitude};
+                    map.setCenter(latlng);
+                });
+            }
         }
-
+        function closeForm() { document.getElementById('input-form').style.display = 'none'; }
+        function jumpTo(lat, lng) { map.setCenter({lat, lng}); map.setZoom(17); toggleList(); }
         function toggleList() {
             const overlay = document.getElementById('list-overlay');
             overlay.style.display = (overlay.style.display === 'block') ? 'none' : 'block';
-            if(overlay.style.display === 'block') renderMemos();
         }
     </script>
 </body>
