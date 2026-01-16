@@ -3,6 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    
+    <link rel="apple-touch-icon" href="https://r.jina.ai/i/5c4e979a320349889600989f664a858e?v=2026011618">
+    <link rel="icon" type="image/png" href="https://r.jina.ai/i/5c4e979a320349889600989f664a858e?v=2026011618">
+    
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="タクシーMAP">
+
     <title>たかちゃんタクシーMAP(売上分析版)</title>
     <style>
         html, body { height: 100%; margin: 0; padding: 0; font-family: sans-serif; background: #f4f4f4; }
@@ -21,18 +29,20 @@
         .gps-btn { background: #007aff; color: #fff; }
         .list-btn { background: #333; color: #fff; }
         
-        /* リスト表示の改善 */
+        /* リスト・タブ表示 */
         #list-overlay { position: fixed; bottom: 0; left: 0; width: 100%; height: 80%; background: white; z-index: 2000; display: none; overflow-y: auto; border-radius: 20px 20px 0 0; }
         .list-header { padding: 15px; border-bottom: 1px solid #eee; position: sticky; top: 0; background: white; z-index: 10; }
         
-        /* フォルダ（タブ）切り替え */
         .tab-bar { display: flex; gap: 5px; margin-top: 10px; }
-        .tab { flex: 1; padding: 8px; font-size: 12px; text-align: center; background: #eee; border-radius: 5px; cursor: pointer; }
+        .tab { flex: 1; padding: 8px; font-size: 12px; text-align: center; background: #eee; border-radius: 5px; cursor: pointer; color: #333; }
         .tab.active { background: #007aff; color: white; }
 
         .list-item { padding: 12px; border-bottom: 1px solid #f0f0f0; display: flex; justify-content: space-between; align-items: flex-start; }
         .badge { background: #eee; padding: 2px 6px; border-radius: 4px; font-size: 11px; margin-right: 4px; color: #555; }
         .action-btn { padding: 4px 10px; font-size: 12px; border-radius: 4px; margin-left: 5px; border: 1px solid #ccc; background: none; }
+        
+        /* 歩合表示用 */
+        .commission-text { font-size: 12px; color: #28a745; font-weight: normal; margin-left: 10px; }
     </style>
 </head>
 <body>
@@ -63,7 +73,10 @@
     <div id="list-overlay">
         <div class="list-header">
             <div style="display:flex; justify-content:space-between; align-items:center;">
-                <b id="total-summary">💰 売上: ¥0</b>
+                <div>
+                    <b id="total-summary" style="font-size: 16px;">💰 売上: ¥0</b>
+                    <div id="commission-summary" class="commission-text"></div>
+                </div>
                 <span onclick="toggleList()" style="color:#007aff; cursor:pointer;">× 閉じる</span>
             </div>
             <div class="tab-bar">
@@ -79,7 +92,22 @@
     <script>
         let map, geocoder, currentMarker, markers = [];
         let selectedLat, selectedLng, editingIndex = null;
-        let currentFilter = 'today'; // 初期状態は「今日」
+        let currentFilter = 'today';
+
+        // たかちゃん専用・西鉄タクシー歩合計算
+        function calculatePay(sales) {
+            let rate = 0.55; // 42万以下でも55%！
+            if (sales >= 550000) rate = 0.608;
+            else if (sales >= 470000) rate = 0.579;
+            return Math.floor(sales * rate);
+        }
+
+        // 性別でピンの色を変えるバイ！
+        function getMarkerColor(gender) {
+            if (gender === "女性") return "#ff2d55"; // ピンク
+            if (gender === "男性") return "#007aff"; // 青
+            return "#333"; // 黒
+        }
 
         function initMap() {
             map = new google.maps.Map(document.getElementById('map'), {
@@ -138,10 +166,9 @@
                 age: document.getElementById('age-input').value,
                 area: document.getElementById('area-input').value,
                 memo: document.getElementById('memo-input').value,
-                // 分析用に細かく日付を保存するバイ！
-                date: now.toISOString().split('T')[0], // 2026-01-16
-                month: now.getFullYear() + "-" + (now.getMonth() + 1), // 2026-1
-                year: String(now.getFullYear()), // 2026
+                date: now.toISOString().split('T')[0],
+                month: now.getFullYear() + "-" + (now.getMonth() + 1),
+                year: String(now.getFullYear()),
                 time: now.toLocaleTimeString('ja-JP', {hour:'2-digit', minute:'2-digit'})
             };
 
@@ -163,8 +190,8 @@
             const monthStr = now.getFullYear() + "-" + (now.getMonth() + 1);
             const yearStr = String(now.getFullYear());
 
-            list.forEach((item, index) => {
-                // フィルター（フォルダ分け）のロジック
+            [...list].reverse().forEach((item, revIndex) => {
+                const actualIndex = list.length - 1 - revIndex;
                 let show = false;
                 if (currentFilter === 'all') show = true;
                 if (currentFilter === 'today' && item.date === todayStr) show = true;
@@ -176,7 +203,8 @@
                 total += item.sales;
                 const marker = new google.maps.Marker({
                     position: {lat: item.lat, lng: item.lng}, map: map,
-                    label: { text: "¥" + item.sales, fontWeight: "bold", fontSize: "12px" }
+                    icon: { path: google.maps.SymbolPath.BACKWARD_CLOSED_ARROW, scale: 6, fillColor: getMarkerColor(item.gender), fillOpacity: 1, strokeWeight: 2, strokeColor: "white" },
+                    label: { text: "¥" + item.sales, fontWeight: "bold", fontSize: "11px" }
                 });
                 markers.push(marker);
 
@@ -184,18 +212,22 @@
                 div.className = 'list-item';
                 div.innerHTML = `
                     <div style="flex:1;">
-                        <b>${item.area}</b> <small>${item.date} ${item.time}</small><br>
+                        <small style="color:#999;">${item.date} ${item.time}</small><br>
+                        <b>${item.area}</b><br>
                         <span class="badge">${item.gender}</span><span class="badge">${item.age}</span><small>${item.memo}</small>
                     </div>
                     <div style="text-align:right;">
                         <b>¥${item.sales.toLocaleString()}</b><br>
-                        <button class="action-btn" onclick="editMemo(${index})">編</button>
-                        <button class="action-btn" onclick="deleteMemo(${index})" style="color:red;">消</button>
+                        <div style="margin-top:5px;">
+                            <button class="action-btn" onclick="editMemo(${actualIndex})">編</button>
+                            <button class="action-btn" onclick="deleteMemo(${actualIndex})" style="color:red; border-color:red;">消</button>
+                        </div>
                     </div>
                 `;
                 listDiv.appendChild(div);
             });
             document.getElementById('total-summary').innerText = `💰 ${currentFilter === 'today' ? '今日' : currentFilter === 'month' ? '今月' : currentFilter === 'year' ? '今年' : '全'}売上: ¥${total.toLocaleString()}`;
+            document.getElementById('commission-summary').innerText = `(推定歩合: ¥${calculatePay(total).toLocaleString()})`;
         }
 
         function editMemo(index) {
@@ -204,6 +236,8 @@
             selectedLat = item.lat; selectedLng = item.lng;
             document.getElementById('form-title').innerText = "✏️ 編集";
             document.getElementById('sales-input').value = item.sales;
+            document.getElementById('gender-input').value = item.gender;
+            document.getElementById('age-input').value = item.age;
             document.getElementById('area-input').value = item.area;
             document.getElementById('memo-input').value = item.memo;
             document.getElementById('input-form').style.display = 'block';
