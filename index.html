@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     
-    <link rel="apple-touch-icon" href="https://r.jina.ai/i/5c4e979a320349889600989f664a858e?v=2026011618">
-    <link rel="icon" type="image/png" href="https://r.jina.ai/i/5c4e979a320349889600989f664a858e?v=2026011618">
+    <link rel="apple-touch-icon" href="https://r.jina.ai/i/5c4e979a320349889600989f664a858e?v=20260116_v3">
+    <link rel="icon" type="image/png" href="https://r.jina.ai/i/5c4e979a320349889600989f664a858e?v=20260116_v3">
     
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -29,7 +29,6 @@
         .gps-btn { background: #007aff; color: #fff; }
         .list-btn { background: #333; color: #fff; }
         
-        /* リスト・タブ表示 */
         #list-overlay { position: fixed; bottom: 0; left: 0; width: 100%; height: 80%; background: white; z-index: 2000; display: none; overflow-y: auto; border-radius: 20px 20px 0 0; }
         .list-header { padding: 15px; border-bottom: 1px solid #eee; position: sticky; top: 0; background: white; z-index: 10; }
         
@@ -40,8 +39,6 @@
         .list-item { padding: 12px; border-bottom: 1px solid #f0f0f0; display: flex; justify-content: space-between; align-items: flex-start; }
         .badge { background: #eee; padding: 2px 6px; border-radius: 4px; font-size: 11px; margin-right: 4px; color: #555; }
         .action-btn { padding: 4px 10px; font-size: 12px; border-radius: 4px; margin-left: 5px; border: 1px solid #ccc; background: none; }
-        
-        /* 歩合表示用 */
         .commission-text { font-size: 12px; color: #28a745; font-weight: normal; margin-left: 10px; }
     </style>
 </head>
@@ -61,7 +58,7 @@
         <label>メモ</label><input type="text" id="memo-input" placeholder="例: 無線">
         <div style="display:flex; gap:10px; margin-top:20px;">
             <button onclick="saveMemo()" style="background:#ffcc00; color:#000; flex:2;">✅ 保存</button>
-            <button onclick="closeForm()" style="background:#eee; color:#333; flex:1;">止める</button>
+            <button onclick="closeForm()" style="background:#eee; color:#333; flex:1;">キャンセル</button>
         </div>
     </div>
 
@@ -94,19 +91,17 @@
         let selectedLat, selectedLng, editingIndex = null;
         let currentFilter = 'today';
 
-        // たかちゃん専用・西鉄タクシー歩合計算
         function calculatePay(sales) {
-            let rate = 0.55; // 42万以下でも55%！
+            let rate = 0.55; 
             if (sales >= 550000) rate = 0.608;
             else if (sales >= 470000) rate = 0.579;
             return Math.floor(sales * rate);
         }
 
-        // 性別でピンの色を変えるバイ！
         function getMarkerColor(gender) {
-            if (gender === "女性") return "#ff2d55"; // ピンク
-            if (gender === "男性") return "#007aff"; // 青
-            return "#333"; // 黒
+            if (gender === "女性") return "#ff2d55";
+            if (gender === "男性") return "#007aff";
+            return "#333";
         }
 
         function initMap() {
