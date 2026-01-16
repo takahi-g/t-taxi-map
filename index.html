@@ -3,31 +3,36 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>たかちゃんタクシーMAP(フル装備)</title>
+    <title>たかちゃんタクシーMAP(編集機能つき)</title>
     <style>
         html, body { height: 100%; margin: 0; padding: 0; font-family: sans-serif; background: #f4f4f4; }
         #map { height: 100%; width: 100%; }
         
-        /* 入力フォーム：項目が増えるので少し大きく */
+        /* 入力フォーム */
         #input-form {
             position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            width: 85%; max-height: 80vh; background: white; z-index: 3000; display: none;
+            width: 85%; max-height: 90vh; background: white; z-index: 3000; display: none;
             padding: 20px; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); overflow-y: auto;
         }
-        label { font-size: 12px; color: #666; font-weight: bold; }
-        input, select { width: 100%; padding: 10px; margin: 5px 0 15px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box; background: #fafafa; }
+        label { font-size: 12px; color: #666; font-weight: bold; display:block; margin-top:10px;}
+        input, select { width: 100%; padding: 12px; margin: 5px 0 5px; border: 1px solid #ccc; border-radius: 8px; font-size: 16px; box-sizing: border-box; background: #fff; }
         
         /* ボタン類 */
         .control-panel { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); z-index: 1000; width: 90%; display: flex; gap: 10px; }
-        button { flex: 1; padding: 15px; border-radius: 30px; border: none; font-size: 16px; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.2); }
+        button { flex: 1; padding: 15px; border-radius: 30px; border: none; font-size: 16px; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.2); cursor: pointer;}
         .gps-btn { background: #007aff; color: #fff; }
         .list-btn { background: #333; color: #fff; }
+        
+        /* 編集・削除ボタン */
+        .action-btn { padding: 4px 10px; font-size: 12px; border-radius: 4px; margin-left: 5px; border: none; cursor: pointer; }
+        .edit-btn { background: #e0f0ff; color: #007aff; border: 1px solid #007aff; }
+        .del-btn { background: #ffecec; color: #ff4444; border: 1px solid #ff4444; }
 
         /* リスト表示 */
         #list-overlay { position: fixed; bottom: 0; left: 0; width: 100%; height: 75%; background: white; z-index: 2000; display: none; overflow-y: auto; border-radius: 20px 20px 0 0; }
         .list-header { padding: 15px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; position: sticky; top: 0; background: white; z-index: 10; font-weight: bold; }
-        .list-item { padding: 12px; border-bottom: 1px solid #f0f0f0; display: flex; justify-content: space-between; align-items: center; }
-        .badge { background: #eee; padding: 2px 6px; border-radius: 4px; font-size: 11px; margin-right: 4px; }
+        .list-item { padding: 12px; border-bottom: 1px solid #f0f0f0; display: flex; justify-content: space-between; align-items: flex-start; }
+        .badge { background: #eee; padding: 2px 6px; border-radius: 4px; font-size: 11px; margin-right: 4px; color: #555; }
     </style>
 </head>
 <body>
@@ -35,7 +40,7 @@
     <div id="map"></div>
 
     <div id="input-form">
-        <h3 style="margin-top:0; text-align:center;">📊 営業記録</h3>
+        <h3 id="form-title" style="margin-top:0; text-align:center;">営業記録</h3>
         
         <label>売上（円）</label>
         <input type="number" id="sales-input" placeholder="例: 1200" inputmode="numeric">
@@ -55,15 +60,15 @@
             </div>
         </div>
 
-        <label>場所（自動）</label>
+        <label>場所</label>
         <input type="text" id="area-input">
 
-        <label>メモ（付け待ち、無線など）</label>
-        <input type="text" id="memo-input" placeholder="例: 無線配車">
+        <label>メモ</label>
+        <input type="text" id="memo-input" placeholder="例: 無線、迎車など">
 
-        <div style="display:flex; gap:10px; margin-top:10px;">
+        <div style="display:flex; gap:10px; margin-top:20px;">
             <button onclick="saveMemo()" style="background:#ffcc00; color:#000; flex:2;">✅ 保存</button>
-            <button onclick="closeForm()" style="background:#eee; color:#333; flex:1;">やめる</button>
+            <button onclick="closeForm()" style="background:#eee; color:#333; flex:1;">キャンセル</button>
         </div>
     </div>
 
@@ -75,7 +80,7 @@
     <div id="list-overlay">
         <div class="list-header">
             <div id="total-summary">💰 本日の売上: ¥0</div>
-            <span onclick="toggleList()" style="color:#007aff;">× 閉じる</span>
+            <span onclick="toggleList()" style="color:#007aff; cursor:pointer;">× 閉じる</span>
         </div>
         <div id="memo-list-content"></div>
     </div>
@@ -83,33 +88,20 @@
     <script>
         let map, geocoder, currentMarker, markers = [];
         let selectedLat, selectedLng;
+        let editingIndex = null; // 今編集しているデータの番号（nullなら新規）
 
         function initMap() {
             map = new google.maps.Map(document.getElementById('map'), {
-                center: {lat: 33.506, lng: 130.522}, // 筑紫野周辺
+                center: {lat: 33.506, lng: 130.522},
                 zoom: 15,
                 disableDefaultUI: true,
                 clickableIcons: false
             });
             geocoder = new google.maps.Geocoder();
 
+            // 地図クリックで新規登録
             map.addListener('click', function(e) {
-                selectedLat = e.latLng.lat();
-                selectedLng = e.latLng.lng();
-                document.getElementById('input-form').style.display = 'block';
-                
-                geocoder.geocode({ location: e.latLng }, function(results, status) {
-                    if (status === "OK" && results[0]) {
-                        let areaName = "不明";
-                        for (let c of results[0].address_components) {
-                            if (c.types.includes("sublocality_level_2") || c.types.includes("sublocality_level_1")) {
-                                areaName = c.long_name;
-                                break;
-                            }
-                        }
-                        document.getElementById('area-input').value = areaName;
-                    }
-                });
+                openFormForNew(e.latLng);
             });
 
             renderMemos();
@@ -131,6 +123,55 @@
             }
         }
 
+        // 新規登録モードでフォームを開く
+        function openFormForNew(latLng) {
+            editingIndex = null; // 新規モード
+            selectedLat = latLng.lat();
+            selectedLng = latLng.lng();
+            
+            document.getElementById('form-title').innerText = "📍 新規記録";
+            document.getElementById('sales-input').value = '';
+            document.getElementById('memo-input').value = '';
+            document.getElementById('area-input').value = '取得中...';
+            document.getElementById('input-form').style.display = 'block';
+
+            // 住所取得
+            geocoder.geocode({ location: latLng }, function(results, status) {
+                if (status === "OK" && results[0]) {
+                    let areaName = "不明";
+                    for (let c of results[0].address_components) {
+                        if (c.types.includes("sublocality_level_2") || c.types.includes("sublocality_level_1")) {
+                            areaName = c.long_name;
+                            break;
+                        }
+                    }
+                    document.getElementById('area-input').value = areaName;
+                }
+            });
+        }
+
+        // 編集モードでフォームを開く
+        function editMemo(index) {
+            editingIndex = index; // 編集モード
+            const list = JSON.parse(localStorage.getItem('taxi_sales_v2') || '[]');
+            const item = list[index];
+
+            // 既存データをフォームに入れる
+            selectedLat = item.lat;
+            selectedLng = item.lng;
+            document.getElementById('form-title').innerText = "✏️ 記録を編集";
+            document.getElementById('sales-input').value = item.sales;
+            document.getElementById('gender-input').value = item.gender;
+            document.getElementById('age-input').value = item.age;
+            document.getElementById('area-input').value = item.area;
+            document.getElementById('memo-input').value = item.memo;
+
+            document.getElementById('input-form').style.display = 'block';
+            
+            // リストを閉じる（見やすくするため）
+            document.getElementById('list-overlay').style.display = 'none';
+        }
+
         function saveMemo() {
             const sales = Number(document.getElementById('sales-input').value) || 0;
             const data = {
@@ -144,7 +185,15 @@
             };
 
             let list = JSON.parse(localStorage.getItem('taxi_sales_v2') || '[]');
-            list.push(data);
+
+            if (editingIndex !== null) {
+                // 編集（上書き）
+                list[editingIndex] = data;
+            } else {
+                // 新規追加
+                list.push(data);
+            }
+
             localStorage.setItem('taxi_sales_v2', JSON.stringify(list));
             
             closeForm();
@@ -170,14 +219,19 @@
                 const div = document.createElement('div');
                 div.className = 'list-item';
                 div.innerHTML = `
-                    <div>
-                        <b>${item.area}</b> <small>${item.time}</small><br>
-                        <span class="badge">${item.gender}</span><span class="badge">${item.age}</span>
-                        <span style="font-size:12px; color:#666;">${item.memo}</span>
+                    <div style="flex:1;">
+                        <div style="font-weight:bold; font-size:14px;">${item.area}</div>
+                        <div style="font-size:12px; color:#666; margin-top:3px;">
+                            ${item.time} | <span class="badge">${item.gender}</span><span class="badge">${item.age}</span>
+                        </div>
+                        <div style="font-size:12px; color:#444; margin-top:2px;">${item.memo}</div>
                     </div>
                     <div style="text-align:right;">
-                        <span style="font-weight:bold;">¥${item.sales.toLocaleString()}</span><br>
-                        <button onclick="deleteMemo(${index})" style="padding:2px 8px; font-size:10px; background:#ffecec; color:#ff4444; border:1px solid #ff4444; margin-top:5px; box-shadow:none;">削除</button>
+                        <div style="font-weight:bold; font-size:16px;">¥${item.sales.toLocaleString()}</div>
+                        <div style="margin-top:5px;">
+                            <button class="action-btn edit-btn" onclick="editMemo(${index})">編集</button>
+                            <button class="action-btn del-btn" onclick="deleteMemo(${index})">削除</button>
+                        </div>
                     </div>
                 `;
                 listDiv.appendChild(div);
@@ -186,7 +240,7 @@
         }
 
         function deleteMemo(index) {
-            if(confirm("この記録を消してもよか？")) {
+            if(confirm("本当に消すね？")) {
                 let list = JSON.parse(localStorage.getItem('taxi_sales_v2'));
                 list.splice(index, 1);
                 localStorage.setItem('taxi_sales_v2', JSON.stringify(list));
@@ -196,8 +250,7 @@
 
         function closeForm() { 
             document.getElementById('input-form').style.display = 'none';
-            document.getElementById('sales-input').value = '';
-            document.getElementById('memo-input').value = '';
+            editingIndex = null; // 編集モード解除
         }
         function toggleList() {
             const el = document.getElementById('list-overlay');
