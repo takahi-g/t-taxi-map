@@ -5,117 +5,223 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>たかちゃんタクシーMAP(完全版)</title>
     <style>
-        body { margin: 0; padding: 0; font-family: sans-serif; }
-        #map { height: 100vh; width: 100vw; background: #eee; }
-        .control-panel { position: absolute; bottom: 25px; left: 50%; transform: translateX(-50%); z-index: 1000; width: 95%; display: flex; gap: 10px; }
-        button { flex: 1; padding: 15px; border-radius: 12px; border: none; font-size: 16px; font-weight: bold; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
+        /* 画面いっぱいに地図を出すための基本設定 */
+        html, body { height: 100%; margin: 0; padding: 0; font-family: sans-serif; }
+        #map { height: 100%; width: 100%; background: #e5e3df; }
+        
+        /* もしエラーが起きたら表示する赤い箱 */
+        #error-message {
+            display: none; position: fixed; top: 10%; left: 5%; width: 90%; 
+            background: #ffe6e6; color: #d8000c; padding: 15px; 
+            border: 1px solid #d8000c; border-radius: 5px; z-index: 9999;
+            font-weight: bold; white-space: pre-wrap;
+        }
+
+        /* ボタン類のデザイン */
+        .control-panel { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); z-index: 1000; width: 90%; display: flex; gap: 10px; }
+        button { flex: 1; padding: 15px; border-radius: 30px; border: none; font-size: 16px; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.2); cursor: pointer; }
         .gps-btn { background: #007aff; color: #fff; }
         .list-btn { background: #333; color: #fff; }
-        #input-form { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 90%; background: white; z-index: 3000; display: none; padding: 20px; border-radius: 15px; box-shadow: 0 0 20px rgba(0,0,0,0.3); }
-        input, select { width: 100%; padding: 12px; margin: 5px 0 15px; border: 1px solid #ccc; border-radius: 8px; font-size: 16px; box-sizing: border-box; }
-        #list-overlay { position: fixed; bottom: 0; left: 0; width: 100%; height: 80%; background: white; z-index: 2000; display: none; overflow-y: auto; border-radius: 20px 20px 0 0; }
-        .list-header { padding: 15px; font-weight: bold; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; position: sticky; top: 0; background: white; }
+
+        /* 入力フォーム */
+        #input-form {
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 85%; background: white; z-index: 3000; display: none;
+            padding: 20px; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+        }
+        input { width: 100%; padding: 10px; margin: 5px 0 15px; border: 1px solid #ddd; border-radius: 5px; font-size: 16px; box-sizing: border-box; }
+        
+        /* リスト表示 */
+        #list-overlay { position: fixed; bottom: 0; left: 0; width: 100%; height: 70%; background: white; z-index: 2000; display: none; overflow-y: auto; border-radius: 20px 20px 0 0; box-shadow: 0 -5px 15px rgba(0,0,0,0.1); }
+        .list-header { padding: 15px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; position: sticky; top: 0; background: white; font-weight: bold; }
+        .list-content { padding: 10px; }
+        .list-item { padding: 10px; border-bottom: 1px solid #f0f0f0; }
     </style>
 </head>
 <body>
 
-    <div id="map">地図を読み込み中...</div>
+    <div id="error-message"></div>
+    
+    <div id="map"></div>
 
     <div id="input-form">
-        <b style="display:block; text-align:center; margin-bottom:10px;">📊 売上を記録</b>
-        <label style="font-size:12px;">売上（円）</label>
-        <input type="number" id="sales-input" placeholder="例: 1200" inputmode="numeric">
-        <label style="font-size:12px;">地域</label>
+        <h3 style="margin-top:0; text-align:center;">売上入力</h3>
+        <label>売上（円）</label>
+        <input type="number" id="sales-input" placeholder="1200" inputmode="numeric">
+        <label>場所（自動）</label>
         <input type="text" id="area-input">
-        <button style="background:#ffcc00; width:100%; margin-bottom:10px;" onclick="saveMemo()">✅ 保存</button>
-        <button style="background:#eee; width:100%;" onclick="closeForm()">やめる</button>
+        <div style="display:flex; gap:10px;">
+            <button onclick="saveMemo()" style="background:#ffcc00; color:#000;">保存</button>
+            <button onclick="closeForm()" style="background:#eee; color:#333;">キャンセル</button>
+        </div>
     </div>
 
     <div class="control-panel">
-        <button class="gps-btn" onclick="goToCurrentLocation()">📍 現在地へ</button>
-        <button class="list-btn" onclick="toggleList()">📋 売上リスト</button>
+        <button class="gps-btn" onclick="goToCurrentLocation()">📍 現在地</button>
+        <button class="list-btn" onclick="toggleList()">📊 売上リスト</button>
     </div>
 
     <div id="list-overlay">
         <div class="list-header">
-            <div id="total-summary">💰 総売上: ¥0</div>
-            <span onclick="toggleList()">× 閉じる</span>
+            <span id="total-summary">総売上: ¥0</span>
+            <span onclick="toggleList()" style="color:#888;">閉じる</span>
         </div>
-        <div id="memo-list-content"></div>
+        <div id="memo-list-content" class="list-content"></div>
     </div>
 
-　　<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAi0_BQ9-5c3-7sTh1rwevVJlOsYxoLR_4&callback=initMap&libraries=places"></script>
     <script>
+        // エラーを捕まえる罠を仕掛ける
+        window.onerror = function(msg, url, line) {
+            const errDiv = document.getElementById('error-message');
+            errDiv.style.display = 'block';
+            errDiv.innerHTML = "⚠️ エラー発生！<br>" + msg + "<br>(行: " + line + ")";
+            return false;
+        };
+
         let map, geocoder, currentMarker, markers = [];
         let selectedLat, selectedLng;
 
+        // 地図の準備をする関数（これをGoogleが呼び出す）
         function initMap() {
-            map = new google.maps.Map(document.getElementById('map'), {
-                center: {lat: 33.5902, lng: 130.4017},
-                zoom: 16,
-                disableDefaultUI: true
-            });
-            geocoder = new google.maps.Geocoder();
-            map.addListener('click', e => {
-                selectedLat = e.latLng.lat();
-                selectedLng = e.latLng.lng();
-                document.getElementById('input-form').style.display = 'block';
-                geocoder.geocode({ location: e.latLng }, (results, status) => {
-                    if (status === "OK" && results[0]) {
-                        document.getElementById('area-input').value = results[0].formatted_address.split('、')[1] || "不明";
-                    }
+            try {
+                map = new google.maps.Map(document.getElementById('map'), {
+                    center: {lat: 33.5902, lng: 130.4017}, // 博多駅周辺
+                    zoom: 15,
+                    disableDefaultUI: true, // 余計なボタンを消す
+                    clickableIcons: false   // お店のアイコンをクリック不可にする
                 });
-            });
-            renderMemos();
-            goToCurrentLocation();
+                
+                geocoder = new google.maps.Geocoder();
+
+                // 地図をタップした時の処理
+                map.addListener('click', function(e) {
+                    selectedLat = e.latLng.lat();
+                    selectedLng = e.latLng.lng();
+                    document.getElementById('input-form').style.display = 'block';
+                    
+                    // 住所を調べる
+                    geocoder.geocode({ location: e.latLng }, function(results, status) {
+                        if (status === "OK" && results[0]) {
+                            // "福岡市博多区" みたいな部分をうまく抜き出す
+                            let addr = results[0].address_components;
+                            let areaName = "不明";
+                            // 町名などを探すロジック
+                            for (let i = 0; i < addr.length; i++) {
+                                if (addr[i].types.includes("sublocality_level_2") || addr[i].types.includes("sublocality_level_1")) {
+                                    areaName = addr[i].long_name;
+                                    break;
+                                }
+                            }
+                            document.getElementById('area-input').value = areaName;
+                        }
+                    });
+                });
+
+                renderMemos(); // 保存したデータを表示
+                goToCurrentLocation(); // 起動時に現在地へ
+
+            } catch (e) {
+                alert("地図の表示中にエラーが出ました: " + e);
+            }
         }
 
+        // 現在地へ移動
         function goToCurrentLocation() {
             if (navigator.geolocation) {
-                navigator.geolocation.getCurrentPosition(pos => {
+                navigator.geolocation.getCurrentPosition(function(pos) {
                     const latlng = {lat: pos.coords.latitude, lng: pos.coords.longitude};
                     map.setCenter(latlng);
+                    map.setZoom(17);
+                    
                     if (currentMarker) currentMarker.setMap(null);
-                    currentMarker = new google.maps.Marker({ position: latlng, map: map, icon: { path: google.maps.SymbolPath.CIRCLE, scale: 8, fillColor: '#007aff', fillOpacity: 1, strokeWeight: 2, strokeColor: 'white' } });
+                    currentMarker = new google.maps.Marker({
+                        position: latlng,
+                        map: map,
+                        title: "現在地",
+                        icon: {
+                            path: google.maps.SymbolPath.CIRCLE,
+                            scale: 10,
+                            fillColor: "#4285F4",
+                            fillOpacity: 1,
+                            strokeWeight: 2,
+                            strokeColor: "white"
+                        }
+                    });
+                }, function() {
+                    // GPS取得失敗
+                    console.log("GPSの許可が必要です");
                 });
             }
         }
 
+        // 保存ボタン
         function saveMemo() {
-            const sales = Number(document.getElementById('sales-input').value) || 0;
-            const area = document.getElementById('area-input').value || "不明";
-            const memo = { lat: selectedLat, lng: selectedLng, sales: sales, area: area, time: new Date().toLocaleTimeString() };
-            let memos = JSON.parse(localStorage.getItem('taxiMemos') || '[]');
-            memos.push(memo);
-            localStorage.setItem('taxiMemos', JSON.stringify(memos));
-            renderMemos();
+            const sales = Number(document.getElementById('sales-input').value);
+            const area = document.getElementById('area-input').value || "場所不明";
+            
+            if (!sales) { alert("売上を入れてね！"); return; }
+
+            const data = {
+                lat: selectedLat,
+                lng: selectedLng,
+                sales: sales,
+                area: area,
+                time: new Date().toLocaleTimeString('ja-JP', {hour: '2-digit', minute:'2-digit'})
+            };
+
+            let list = JSON.parse(localStorage.getItem('taxi_sales_v1') || '[]');
+            list.push(data);
+            localStorage.setItem('taxi_sales_v1', JSON.stringify(list));
+            
             closeForm();
+            renderMemos();
+            alert("記録しました！");
         }
 
+        // リストとマーカーを表示
         function renderMemos() {
+            // 前のマーカーを消す
             markers.forEach(m => m.setMap(null));
-            const memos = JSON.parse(localStorage.getItem('taxiMemos') || '[]');
+            markers = [];
+
+            const list = JSON.parse(localStorage.getItem('taxi_sales_v1') || '[]');
+            const listDiv = document.getElementById('memo-list-content');
+            listDiv.innerHTML = "";
             let total = 0;
-            const list = document.getElementById('memo-list-content');
-            list.innerHTML = "";
-            memos.forEach(m => {
-                total += m.sales;
-                const marker = new google.maps.Marker({ position: {lat: m.lat, lng: m.lng}, map: map });
+
+            list.forEach(function(item) {
+                total += item.sales;
+                
+                // 地図にピンを立てる
+                const marker = new google.maps.Marker({
+                    position: {lat: item.lat, lng: item.lng},
+                    map: map,
+                    label: { text: "¥" + item.sales, color: "black", fontSize: "12px", fontWeight: "bold" }
+                });
                 markers.push(marker);
-                const item = document.createElement('div');
-                item.style.padding = "10px";
-                item.style.borderBottom = "1px solid #eee";
-                item.innerHTML = `<b>${m.area}</b>: ¥${m.sales} (${m.time})`;
-                list.appendChild(item);
+
+                // リストに追加
+                const div = document.createElement('div');
+                div.className = 'list-item';
+                div.innerHTML = `<b>${item.area}</b> <span style="float:right">¥${item.sales}</span><br><small>${item.time}</small>`;
+                listDiv.appendChild(div);
             });
-            document.getElementById('total-summary').innerText = `💰 総売上: ¥${total.toLocaleString()}`;
+
+            document.getElementById('total-summary').innerText = "💰 総売上: ¥" + total.toLocaleString();
         }
 
-        function closeForm() { document.getElementById('input-form').style.display = 'none'; }
+        function closeForm() {
+            document.getElementById('input-form').style.display = 'none';
+            document.getElementById('sales-input').value = '';
+        }
+
         function toggleList() {
-            const o = document.getElementById('list-overlay');
-            o.style.display = (o.style.display === 'block') ? 'none' : 'block';
+            const el = document.getElementById('list-overlay');
+            el.style.display = (el.style.display === 'block') ? 'none' : 'block';
         }
     </script>
+
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAi0_BQ9-5c3-7sTh1rwevVJlOsYxoLR_4&callback=initMap&libraries=places" async defer></script>
+
 </body>
 </html>
