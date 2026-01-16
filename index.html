@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     
-    <link rel="apple-touch-icon" href="https://r.jina.ai/i/5c4e979a320349889600989f664a858e">
-    <link rel="icon" type="image/png" href="https://r.jina.ai/i/5c4e979a320349889600989f664a858e">
+    <link rel="apple-touch-icon" href="https://r.jina.ai/i/5c4e979a320349889600989f664a858e?v=3">
+    <link rel="icon" type="image/png" href="https://r.jina.ai/i/5c4e979a320349889600989f664a858e?v=3">
     
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -17,7 +17,7 @@
         html, body { height: 100%; margin: 0; padding: 0; font-family: -apple-system, sans-serif; background: #f4f4f4; }
         #map { height: 100%; width: 100%; }
         
-        /* 入力フォームのスタイル */
+        /* フォーム */
         #input-form {
             position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
             width: 85%; max-height: 90vh; background: white; z-index: 3000; display: none;
@@ -26,27 +26,24 @@
         label { font-size: 12px; color: #666; font-weight: bold; display:block; margin-top:10px;}
         input, select { width: 100%; padding: 12px; margin: 5px 0 5px; border: 1px solid #ccc; border-radius: 8px; font-size: 16px; box-sizing: border-box; background: #fff; }
         
-        /* ボタン類のスタイル */
+        /* ボタン */
         .control-panel { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); z-index: 1000; width: 90%; display: flex; gap: 10px; }
         button { flex: 1; padding: 15px; border-radius: 30px; border: none; font-size: 16px; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.2); cursor: pointer;}
         .gps-btn { background: #007aff; color: #fff; }
         .list-btn { background: #333; color: #fff; }
-        
         .save-btn { background: #ffcc00; color: #000; flex: 2; margin-top: 15px; }
         .cancel-btn { background: #eee; color: #333; flex: 1; margin-top: 15px; }
 
-        /* リスト表示のスタイル */
-        #list-overlay { position: fixed; bottom: 0; left: 0; width: 100%; height: 80%; background: white; z-index: 2000; display: none; overflow-y: auto; border-radius: 20px 20px 0 0; }
-        .list-header { padding: 20px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; position: sticky; top: 0; background: white; z-index: 10; font-weight: bold; }
+        /* リスト */
+        #list-overlay { position: fixed; bottom: 0; left: 0; width: 100%; height: 85%; background: white; z-index: 2000; display: none; overflow-y: auto; border-radius: 20px 20px 0 0; }
+        .list-header { padding: 20px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; position: sticky; top: 0; background: white; z-index: 10; }
         .list-item { padding: 15px; border-bottom: 1px solid #f0f0f0; display: flex; justify-content: space-between; align-items: center; }
         .badge { background: #eee; padding: 3px 8px; border-radius: 4px; font-size: 11px; margin-right: 4px; color: #555; }
+        .date-text { font-size: 11px; color: #999; margin-bottom: 2px; }
         
-        .action-btn { padding: 6px 12px; font-size: 12px; border-radius: 6px; margin-left: 5px; border: none; }
+        .action-btn { padding: 8px 12px; font-size: 12px; border-radius: 6px; margin-left: 5px; border: none; }
         .edit-btn { background: #e0f0ff; color: #007aff; }
         .del-btn { background: #ffecec; color: #ff4444; }
-
-        /* 歩合計算エリア */
-        #commission-info { font-size: 13px; color: #28a745; margin-top: 5px; }
     </style>
 </head>
 <body>
@@ -54,8 +51,7 @@
     <div id="map"></div>
 
     <div id="input-form">
-        <h3 id="form-title" style="margin-top:0; text-align:center;">営業記録</h3>
-        
+        <h3 id="form-title" style="margin:0 0 15px; text-align:center;">営業記録</h3>
         <label>売上（円）</label>
         <input type="number" id="sales-input" placeholder="例: 1200" inputmode="numeric">
 
@@ -75,16 +71,14 @@
                 </select>
             </div>
         </div>
-
         <label>場所（自動取得）</label>
         <input type="text" id="area-input">
-
         <label>メモ</label>
         <input type="text" id="memo-input" placeholder="例: 無線、迎車など">
 
         <div style="display:flex; gap:10px;">
             <button class="save-btn" onclick="saveMemo()">✅ 保存</button>
-            <button class="cancel-btn" onclick="closeForm()">キャンセル</button>
+            <button class="cancel-btn" onclick="closeForm()">× 閉じる</button>
         </div>
     </div>
 
@@ -96,10 +90,10 @@
     <div id="list-overlay">
         <div class="list-header">
             <div>
-                <div id="total-summary" style="font-size: 18px;">💰 本日の売上: ¥0</div>
-                <div id="commission-summary" style="font-size: 14px; color: #28a745; font-weight: normal;">(推定歩合: ¥0)</div>
+                <div id="total-summary" style="font-size: 18px; font-weight:bold;">💰 売上: ¥0</div>
+                <div id="commission-summary" style="font-size: 14px; color: #28a745;">(歩合: ¥0)</div>
             </div>
-            <span onclick="toggleList()" style="color:#007aff; cursor:pointer; font-size: 18px;">× 閉じる</span>
+            <span onclick="toggleList()" style="color:#007aff; cursor:pointer; font-size: 16px;">× 閉じる</span>
         </div>
         <div id="memo-list-content"></div>
     </div>
@@ -109,7 +103,7 @@
         let selectedLat, selectedLng;
         let editingIndex = null;
 
-        // 西鉄タクシー歩合率計算（たかちゃんルール：42万以下でも55%！）
+        // 【たかちゃん歩合率】42万以下でも55%！
         function calculatePay(sales) {
             let rate = 0.55;
             if (sales >= 550000) rate = 0.608;
@@ -117,66 +111,34 @@
             return Math.floor(sales * rate);
         }
 
-        // 性別ごとのピン色設定
         function getMarkerIcon(gender) {
-            let color = "#007aff"; // 男：青
-            if (gender === "女性") color = "#ff2d55"; // 女：赤
-            if (gender === "その他") color = "#333"; // その他：黒
-            
+            let color = (gender === "女性") ? "#ff2d55" : (gender === "男性" ? "#007aff" : "#333");
             return {
                 path: google.maps.SymbolPath.BACKWARD_CLOSED_ARROW,
-                scale: 6,
-                fillColor: color,
-                fillOpacity: 1,
-                strokeWeight: 2,
-                strokeColor: "white"
+                scale: 6, fillColor: color, fillOpacity: 1, strokeWeight: 2, strokeColor: "white"
             };
         }
 
         function initMap() {
             map = new google.maps.Map(document.getElementById('map'), {
                 center: {lat: 33.506, lng: 130.522},
-                zoom: 15,
-                disableDefaultUI: true,
-                clickableIcons: false
+                zoom: 15, disableDefaultUI: true, clickableIcons: false
             });
             geocoder = new google.maps.Geocoder();
-
-            map.addListener('click', function(e) {
-                openFormForNew(e.latLng);
-            });
-
+            map.addListener('click', function(e) { openFormForNew(e.latLng); });
             renderMemos();
             goToCurrentLocation();
         }
 
-        function goToCurrentLocation() {
-            if (navigator.geolocation) {
-                navigator.geolocation.getCurrentPosition(function(pos) {
-                    const latlng = {lat: pos.coords.latitude, lng: pos.coords.longitude};
-                    map.setCenter(latlng);
-                    if (currentMarker) currentMarker.setMap(null);
-                    currentMarker = new google.maps.Marker({
-                        position: latlng,
-                        map: map,
-                        icon: { path: google.maps.SymbolPath.CIRCLE, scale: 10, fillColor: "#007aff", fillOpacity: 1, strokeWeight: 2, strokeColor: "white" }
-                    });
-                });
-            }
-        }
-
         function openFormForNew(latLng) {
             editingIndex = null;
-            selectedLat = latLng.lat();
-            selectedLng = latLng.lng();
-            
+            selectedLat = latLng.lat(); selectedLng = latLng.lng();
             document.getElementById('form-title').innerText = "📍 新規記録";
             document.getElementById('sales-input').value = '';
             document.getElementById('memo-input').value = '';
-            document.getElementById('area-input').value = '住所を取得中...';
+            document.getElementById('area-input').value = '取得中...';
             document.getElementById('input-form').style.display = 'block';
 
-            // 丁目まで取得するロジック
             geocoder.geocode({ location: latLng }, function(results, status) {
                 if (status === "OK" && results[0]) {
                     let town = "", chome = "";
@@ -184,13 +146,13 @@
                         if (c.types.includes("sublocality_level_2")) town = c.long_name;
                         if (c.types.includes("sublocality_level_3")) chome = c.long_name;
                     }
-                    let areaName = (town || chome) ? (town + chome) : "不明";
-                    document.getElementById('area-input').value = areaName;
+                    document.getElementById('area-input').value = (town + chome) || "不明";
                 }
             });
         }
 
         function saveMemo() {
+            const now = new Date();
             const sales = Number(document.getElementById('sales-input').value) || 0;
             const data = {
                 lat: selectedLat, lng: selectedLng,
@@ -199,12 +161,19 @@
                 age: document.getElementById('age-input').value,
                 area: document.getElementById('area-input').value,
                 memo: document.getElementById('memo-input').value,
-                time: new Date().toLocaleTimeString('ja-JP', {hour: '2-digit', minute:'2-digit'})
+                // 【年月日の保存を追加！】
+                date: now.toLocaleDateString('ja-JP'), 
+                time: now.toLocaleTimeString('ja-JP', {hour: '2-digit', minute:'2-digit'})
             };
 
             let list = JSON.parse(localStorage.getItem('taxi_sales_v2') || '[]');
-            if (editingIndex !== null) list[editingIndex] = data;
-            else list.push(data);
+            if (editingIndex !== null) {
+                // 編集時は日付を上書きしないようにするならここを調整
+                data.date = list[editingIndex].date; 
+                list[editingIndex] = data;
+            } else {
+                list.push(data);
+            }
 
             localStorage.setItem('taxi_sales_v2', JSON.stringify(list));
             closeForm();
@@ -219,32 +188,32 @@
             listDiv.innerHTML = "";
             let totalSales = 0;
 
-            list.forEach(function(item, index) {
+            // 新しい順に表示
+            [...list].reverse().forEach(function(item, revIndex) {
+                let index = list.length - 1 - revIndex;
                 totalSales += item.sales;
                 
-                // 地図上にピンを立てる
                 const marker = new google.maps.Marker({
                     position: {lat: item.lat, lng: item.lng},
-                    map: map,
-                    icon: getMarkerIcon(item.gender),
-                    label: { text: "¥" + item.sales, fontWeight: "bold", fontSize: "12px", color: "#333", className: 'marker-label' }
+                    map: map, icon: getMarkerIcon(item.gender),
+                    label: { text: "¥" + item.sales, fontWeight: "bold", fontSize: "12px" }
                 });
                 markers.push(marker);
 
-                // リスト項目の作成
                 const div = document.createElement('div');
                 div.className = 'list-item';
                 div.innerHTML = `
                     <div style="flex:1;">
-                        <div style="font-weight:bold;">${item.area}</div>
-                        <div style="font-size:12px; color:#666;">
-                            ${item.time} | <span class="badge">${item.gender}</span><span class="badge">${item.age}</span>
+                        <div class="date-text">${item.date || ''} ${item.time}</div>
+                        <div style="font-weight:bold; font-size:15px;">${item.area}</div>
+                        <div style="font-size:12px; margin-top:2px;">
+                            <span class="badge">${item.gender}</span><span class="badge">${item.age}</span>
+                            <span style="color:#666; margin-left:5px;">${item.memo}</span>
                         </div>
-                        <div style="font-size:12px; color:#444;">${item.memo}</div>
                     </div>
                     <div style="text-align:right;">
                         <div style="font-weight:bold; font-size:16px;">¥${item.sales.toLocaleString()}</div>
-                        <div style="margin-top:5px;">
+                        <div style="margin-top:8px;">
                             <button class="action-btn edit-btn" onclick="editMemo(${index})">編集</button>
                             <button class="action-btn del-btn" onclick="deleteMemo(${index})">削除</button>
                         </div>
@@ -253,10 +222,17 @@
                 listDiv.appendChild(div);
             });
 
-            // 合計と歩合の表示
-            document.getElementById('total-summary').innerText = "💰 本日の売上: ¥" + totalSales.toLocaleString();
-            let estimatedPay = calculatePay(totalSales);
-            document.getElementById('commission-summary').innerText = "(推定歩合: ¥" + estimatedPay.toLocaleString() + ")";
+            document.getElementById('total-summary').innerText = "💰 合計売上: ¥" + totalSales.toLocaleString();
+            document.getElementById('commission-summary').innerText = "(推定歩合: ¥" + calculatePay(totalSales).toLocaleString() + ")";
+        }
+
+        function deleteMemo(index) {
+            if(confirm("消してもよかと？")) {
+                let list = JSON.parse(localStorage.getItem('taxi_sales_v2'));
+                list.splice(index, 1);
+                localStorage.setItem('taxi_sales_v2', JSON.stringify(list));
+                renderMemos();
+            }
         }
 
         function editMemo(index) {
@@ -264,8 +240,7 @@
             const list = JSON.parse(localStorage.getItem('taxi_sales_v2') || '[]');
             const item = list[index];
             selectedLat = item.lat; selectedLng = item.lng;
-            
-            document.getElementById('form-title').innerText = "✏️ 編集";
+            document.getElementById('form-title').innerText = "✏️ 記録を編集";
             document.getElementById('sales-input').value = item.sales;
             document.getElementById('gender-input').value = item.gender;
             document.getElementById('age-input').value = item.age;
@@ -275,22 +250,25 @@
             document.getElementById('list-overlay').style.display = 'none';
         }
 
-        function deleteMemo(index) {
-            if(confirm("この記録を消してもいい？")) {
-                let list = JSON.parse(localStorage.getItem('taxi_sales_v2'));
-                list.splice(index, 1);
-                localStorage.setItem('taxi_sales_v2', JSON.stringify(list));
-                renderMemos();
+        function goToCurrentLocation() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(function(pos) {
+                    const latlng = {lat: pos.coords.latitude, lng: pos.coords.longitude};
+                    map.setCenter(latlng);
+                    if (currentMarker) currentMarker.setMap(null);
+                    currentMarker = new google.maps.Marker({
+                        position: latlng, map: map,
+                        icon: { path: google.maps.SymbolPath.CIRCLE, scale: 10, fillColor: "#007aff", fillOpacity: 1, strokeWeight: 2, strokeColor: "white" }
+                    });
+                });
             }
         }
-
-        function closeForm() { document.getElementById('input-form').style.display = 'none'; editingIndex = null; }
+        function closeForm() { document.getElementById('input-form').style.display = 'none'; }
         function toggleList() {
             const el = document.getElementById('list-overlay');
             el.style.display = (el.style.display === 'block') ? 'none' : 'block';
         }
     </script>
-
     <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAi0_BQ9-5c3-7sTh1rwevVJlOsYxoLR_4&callback=initMap&libraries=places" async defer></script>
 </body>
 </html>
