@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     
-    <link rel="apple-touch-icon" href="https://r.jina.ai/i/5c4e979a320349889600989f664a858e?v=20260116_v3">
-    <link rel="icon" type="image/png" href="https://r.jina.ai/i/5c4e979a320349889600989f664a858e?v=20260116_v3">
+    <link rel="apple-touch-icon" href="https://raw.githubusercontent.com/takahi-g/t-taxi-map/main/icon.png?v=20260116">
+    <link rel="icon" type="image/png" href="https://raw.githubusercontent.com/takahi-g/t-taxi-map/main/icon.png?v=20260116">
     
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -39,7 +39,8 @@
         .list-item { padding: 12px; border-bottom: 1px solid #f0f0f0; display: flex; justify-content: space-between; align-items: flex-start; }
         .badge { background: #eee; padding: 2px 6px; border-radius: 4px; font-size: 11px; margin-right: 4px; color: #555; }
         .action-btn { padding: 4px 10px; font-size: 12px; border-radius: 4px; margin-left: 5px; border: 1px solid #ccc; background: none; }
-        .commission-text { font-size: 12px; color: #28a745; font-weight: normal; margin-left: 10px; }
+        
+        .commission-text { font-size: 13px; color: #28a745; font-weight: bold; margin-top: 5px; }
     </style>
 </head>
 <body>
@@ -91,6 +92,7 @@
         let selectedLat, selectedLng, editingIndex = null;
         let currentFilter = 'today';
 
+        // 西鉄タクシー歩合計算（たかちゃん専用）
         function calculatePay(sales) {
             let rate = 0.55; 
             if (sales >= 550000) rate = 0.608;
@@ -98,6 +100,7 @@
             return Math.floor(sales * rate);
         }
 
+        // 性別でピンの色分け
         function getMarkerColor(gender) {
             if (gender === "女性") return "#ff2d55";
             if (gender === "男性") return "#007aff";
