@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>たかちゃんタクシーMAP(編集機能つき)</title>
+    <title>たかちゃんタクシーMAP(丁目対応版)</title>
     <style>
         html, body { height: 100%; margin: 0; padding: 0; font-family: sans-serif; background: #f4f4f4; }
         #map { height: 100%; width: 100%; }
@@ -60,7 +60,7 @@
             </div>
         </div>
 
-        <label>場所</label>
+        <label>場所（自動取得）</label>
         <input type="text" id="area-input">
 
         <label>メモ</label>
@@ -88,7 +88,7 @@
     <script>
         let map, geocoder, currentMarker, markers = [];
         let selectedLat, selectedLng;
-        let editingIndex = null; // 今編集しているデータの番号（nullなら新規）
+        let editingIndex = null; 
 
         function initMap() {
             map = new google.maps.Map(document.getElementById('map'), {
@@ -123,40 +123,54 @@
             }
         }
 
-        // 新規登録モードでフォームを開く
+        // 新規登録モード
         function openFormForNew(latLng) {
-            editingIndex = null; // 新規モード
+            editingIndex = null;
             selectedLat = latLng.lat();
             selectedLng = latLng.lng();
             
             document.getElementById('form-title').innerText = "📍 新規記録";
             document.getElementById('sales-input').value = '';
             document.getElementById('memo-input').value = '';
-            document.getElementById('area-input').value = '取得中...';
+            document.getElementById('area-input').value = '住所を調べています...';
             document.getElementById('input-form').style.display = 'block';
 
-            // 住所取得
+            // ★ここを「丁目」まで出るように改造したバイ！
             geocoder.geocode({ location: latLng }, function(results, status) {
                 if (status === "OK" && results[0]) {
+                    let town = "";   // 町名（天神）
+                    let chome = "";  // 丁目（1丁目）
                     let areaName = "不明";
+
+                    // 住所のパーツを一つずつチェック
                     for (let c of results[0].address_components) {
-                        if (c.types.includes("sublocality_level_2") || c.types.includes("sublocality_level_1")) {
-                            areaName = c.long_name;
-                            break;
+                        if (c.types.includes("sublocality_level_2")) town = c.long_name;
+                        if (c.types.includes("sublocality_level_3")) chome = c.long_name;
+                    }
+
+                    // 町名と丁目をくっつける（例：天神 ＋ 1丁目）
+                    if (town || chome) {
+                        areaName = town + chome;
+                    } else {
+                        // もし町名が取れなかったら、もっと広い地名（区など）を使う
+                        for (let c of results[0].address_components) {
+                            if (c.types.includes("sublocality_level_1")) {
+                                areaName = c.long_name; break;
+                            }
                         }
                     }
+                    
                     document.getElementById('area-input').value = areaName;
                 }
             });
         }
 
-        // 編集モードでフォームを開く
+        // 編集モード
         function editMemo(index) {
-            editingIndex = index; // 編集モード
+            editingIndex = index;
             const list = JSON.parse(localStorage.getItem('taxi_sales_v2') || '[]');
             const item = list[index];
 
-            // 既存データをフォームに入れる
             selectedLat = item.lat;
             selectedLng = item.lng;
             document.getElementById('form-title').innerText = "✏️ 記録を編集";
@@ -167,8 +181,6 @@
             document.getElementById('memo-input').value = item.memo;
 
             document.getElementById('input-form').style.display = 'block';
-            
-            // リストを閉じる（見やすくするため）
             document.getElementById('list-overlay').style.display = 'none';
         }
 
@@ -187,15 +199,12 @@
             let list = JSON.parse(localStorage.getItem('taxi_sales_v2') || '[]');
 
             if (editingIndex !== null) {
-                // 編集（上書き）
                 list[editingIndex] = data;
             } else {
-                // 新規追加
                 list.push(data);
             }
 
             localStorage.setItem('taxi_sales_v2', JSON.stringify(list));
-            
             closeForm();
             renderMemos();
         }
@@ -250,7 +259,7 @@
 
         function closeForm() { 
             document.getElementById('input-form').style.display = 'none';
-            editingIndex = null; // 編集モード解除
+            editingIndex = null;
         }
         function toggleList() {
             const el = document.getElementById('list-overlay');
