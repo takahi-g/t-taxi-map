@@ -1,14 +1,16 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-    <link rel="apple-touch-icon" href="icon.png">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>たかちゃんタクシーMAP(売上分析版)</title>
+    
+    <title>たかちゃんタクシーMAP</title>
+    <link rel="apple-touch-icon" href="https://raw.githubusercontent.com/takahi-g/t-taxi-map/main/icon.png">
+    <link rel="icon" type="image/png" href="https://raw.githubusercontent.com/takahi-g/t-taxi-map/main/icon.png">
+    
     <style>
         html, body { height: 100%; margin: 0; padding: 0; font-family: sans-serif; background: #f4f4f4; }
         #map { height: 100%; width: 100%; }
-        
         #input-form {
             position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
             width: 85%; max-height: 90vh; background: white; z-index: 3000; display: none;
@@ -16,21 +18,15 @@
         }
         label { font-size: 12px; color: #666; font-weight: bold; display:block; margin-top:10px;}
         input, select { width: 100%; padding: 12px; margin: 5px 0 5px; border: 1px solid #ccc; border-radius: 8px; font-size: 16px; box-sizing: border-box; }
-        
         .control-panel { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); z-index: 1000; width: 90%; display: flex; gap: 10px; }
         button { flex: 1; padding: 15px; border-radius: 30px; border: none; font-size: 16px; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.2); cursor: pointer;}
         .gps-btn { background: #007aff; color: #fff; }
         .list-btn { background: #333; color: #fff; }
-        
-        /* リスト表示の改善 */
         #list-overlay { position: fixed; bottom: 0; left: 0; width: 100%; height: 80%; background: white; z-index: 2000; display: none; overflow-y: auto; border-radius: 20px 20px 0 0; }
         .list-header { padding: 15px; border-bottom: 1px solid #eee; position: sticky; top: 0; background: white; z-index: 10; }
-        
-        /* フォルダ（タブ）切り替え */
         .tab-bar { display: flex; gap: 5px; margin-top: 10px; }
         .tab { flex: 1; padding: 8px; font-size: 12px; text-align: center; background: #eee; border-radius: 5px; cursor: pointer; }
         .tab.active { background: #007aff; color: white; }
-
         .list-item { padding: 12px; border-bottom: 1px solid #f0f0f0; display: flex; justify-content: space-between; align-items: flex-start; }
         .badge { background: #eee; padding: 2px 6px; border-radius: 4px; font-size: 11px; margin-right: 4px; color: #555; }
         .action-btn { padding: 4px 10px; font-size: 12px; border-radius: 4px; margin-left: 5px; border: 1px solid #ccc; background: none; }
@@ -78,9 +74,10 @@
     </div>
 
     <script>
+        // --- 以前のスクリプトと同じ内容 ---
         let map, geocoder, currentMarker, markers = [];
         let selectedLat, selectedLng, editingIndex = null;
-        let currentFilter = 'today'; // 初期状態は「今日」
+        let currentFilter = 'today';
 
         function initMap() {
             map = new google.maps.Map(document.getElementById('map'), {
@@ -139,10 +136,9 @@
                 age: document.getElementById('age-input').value,
                 area: document.getElementById('area-input').value,
                 memo: document.getElementById('memo-input').value,
-                // 分析用に細かく日付を保存するバイ！
-                date: now.toISOString().split('T')[0], // 2026-01-16
-                month: now.getFullYear() + "-" + (now.getMonth() + 1), // 2026-1
-                year: String(now.getFullYear()), // 2026
+                date: now.toISOString().split('T')[0],
+                month: now.getFullYear() + "-" + (now.getMonth() + 1),
+                year: String(now.getFullYear()),
                 time: now.toLocaleTimeString('ja-JP', {hour:'2-digit', minute:'2-digit'})
             };
 
@@ -158,42 +154,27 @@
             const listDiv = document.getElementById('memo-list-content');
             listDiv.innerHTML = "";
             let total = 0;
-
             const now = new Date();
             const todayStr = now.toISOString().split('T')[0];
             const monthStr = now.getFullYear() + "-" + (now.getMonth() + 1);
             const yearStr = String(now.getFullYear());
 
             list.forEach((item, index) => {
-                // フィルター（フォルダ分け）のロジック
                 let show = false;
                 if (currentFilter === 'all') show = true;
                 if (currentFilter === 'today' && item.date === todayStr) show = true;
                 if (currentFilter === 'month' && item.month === monthStr) show = true;
                 if (currentFilter === 'year' && item.year === yearStr) show = true;
-
                 if (!show) return;
-
                 total += item.sales;
                 const marker = new google.maps.Marker({
                     position: {lat: item.lat, lng: item.lng}, map: map,
                     label: { text: "¥" + item.sales, fontWeight: "bold", fontSize: "12px" }
                 });
                 markers.push(marker);
-
                 const div = document.createElement('div');
                 div.className = 'list-item';
-                div.innerHTML = `
-                    <div style="flex:1;">
-                        <b>${item.area}</b> <small>${item.date} ${item.time}</small><br>
-                        <span class="badge">${item.gender}</span><span class="badge">${item.age}</span><small>${item.memo}</small>
-                    </div>
-                    <div style="text-align:right;">
-                        <b>¥${item.sales.toLocaleString()}</b><br>
-                        <button class="action-btn" onclick="editMemo(${index})">編</button>
-                        <button class="action-btn" onclick="deleteMemo(${index})" style="color:red;">消</button>
-                    </div>
-                `;
+                div.innerHTML = `<div><b>${item.area}</b> <small>${item.date} ${item.time}</small><br><span class="badge">${item.gender}</span><span class="badge">${item.age}</span><small>${item.memo}</small></div><div style="text-align:right;"><b>¥${item.sales.toLocaleString()}</b><br><button class="action-btn" onclick="editMemo(${index})">編</button><button class="action-btn" onclick="deleteMemo(${index})" style="color:red;">消</button></div>`;
                 listDiv.appendChild(div);
             });
             document.getElementById('total-summary').innerText = `💰 ${currentFilter === 'today' ? '今日' : currentFilter === 'month' ? '今月' : currentFilter === 'year' ? '今年' : '全'}売上: ¥${total.toLocaleString()}`;
